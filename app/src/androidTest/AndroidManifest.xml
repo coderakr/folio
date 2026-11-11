@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Test APK only: a synthetic external PDF source. Never packaged in Folio. -->
+        <provider android:name="com.sandboxuser.pdfviewer.SharedPdfTestProvider"
+            android:authorities="com.sandboxuser.pdfviewer.test.sharedpdf"
+            android:exported="true" android:grantUriPermissions="true" />
+    </application>
+</manifest>
