@@ -119,4 +119,26 @@ class LibraryStoreTest {
         assertNull(LibraryStore(context).loadState().books.single().folderId)
     }
 
+    @Test fun previousFolderSchemaLoadsAsRootFolders() = runBlocking {
+        val guide = store.load().single().copy(folderId = "science")
+        val old = org.json.JSONObject(LibraryStore.encodeState(LibraryData(listOf(guide), listOf(Folder("science", "Science")), "dark")))
+        old.put("version", 1)
+        old.getJSONArray("folders").getJSONObject(0).remove("parentId")
+        File(root, "library/library.json").writeText(old.toString())
+        val loaded = LibraryStore(context).loadState()
+        assertEquals(guide, loaded.books.single())
+        assertNull(loaded.folders.single().parentId)
+        assertEquals("dark", loaded.theme)
+    }
+
+    @Test fun stoppingCopyCleansUpThePartialPdf() = runBlocking {
+        val guide = store.load().single()
+        val before = File(root, "library").listFiles()!!.map { it.name }.toSet()
+        var stopped = false
+        try { store.import(Uri.fromFile(store.file(guide.id))) { true } }
+        catch(e: com.sandboxuser.pdfviewer.data.DirectoryImportStopped) { stopped = true }
+        assertTrue(stopped)
+        assertEquals(before, File(root, "library").listFiles()!!.map { it.name }.toSet())
+    }
+
 }

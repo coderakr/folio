@@ -28,7 +28,7 @@ data class Book(val id: String, val title: String, val pages: Int, val bytes: Lo
     val favorite: Boolean = false, val bookmarks: Set<Int> = emptySet(), val marks: List<Mark> = emptyList(),
     val digest: String = "", val folderId: String? = null)
 
-data class Folder(val id: String = UUID.randomUUID().toString(), val name: String)
+data class Folder(val id: String = UUID.randomUUID().toString(), val name: String, val parentId: String? = null)
 data class LibraryData(val books: List<Book> = emptyList(), val folders: List<Folder> = emptyList(), val theme: String = "system")
 
 class LibraryStore(private val context: Context) {
@@ -61,7 +61,7 @@ class LibraryStore(private val context: Context) {
         persistedIds = ids
         savedState = state
     }
-    suspend fun import(uri: Uri): Book = withContext(Dispatchers.IO) {
+    suspend fun import(uri: Uri, shouldStop: () -> Boolean = { false }): Book = withContext(Dispatchers.IO) {
         var name = "Untitled PDF"
         context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
             if (it.moveToFirst()) name = it.getString(0) ?: name
@@ -76,6 +76,7 @@ class LibraryStore(private val context: Context) {
                     var count: Int
                     var total = 0L
                     while (input.read(buffer).also { count = it } != -1) {
+                        if (shouldStop()) throw DirectoryImportStopped()
                         total += count
                         require(total <= 300L * 1024 * 1024) { "Please choose a PDF smaller than 300 MB." }
                         hash.update(buffer, 0, count); output.write(buffer, 0, count)
@@ -140,10 +141,10 @@ class LibraryStore(private val context: Context) {
     }
     companion object {
         fun encodeState(state: LibraryData): String = JSONObject().apply {
-            put("version", 1)
+            put("version", 2)
             put("books", JSONArray(encode(state.books)))
             put("folders", JSONArray().apply { state.folders.forEach { folder ->
-                put(JSONObject().put("id", folder.id).put("name", folder.name))
+                put(JSONObject().put("id", folder.id).put("name", folder.name).put("parentId", folder.parentId ?: JSONObject.NULL))
             } })
             put("theme", state.theme)
         }.toString()
@@ -151,10 +152,10 @@ class LibraryStore(private val context: Context) {
             // Existing installations stored a bare book array. Migrate without changing PDFs or marks.
             if (raw.trimStart().startsWith("[")) return LibraryData(books = decode(raw))
             val root = JSONObject(raw)
-            require(root.getInt("version") == 1) { "Unsupported library version" }
+            require(root.getInt("version") in 1..2) { "Unsupported library version" }
             val folders = root.getJSONArray("folders")
             return LibraryData(decode(root.getJSONArray("books").toString()),
-                List(folders.length()) { folders.getJSONObject(it).let { f -> Folder(f.getString("id"), f.getString("name")) } },
+                List(folders.length()) { folders.getJSONObject(it).let { f -> Folder(f.getString("id"), f.getString("name"), if(f.isNull("parentId")) null else f.getString("parentId")) } },
                 root.optString("theme", "system").takeIf { it in listOf("system", "light", "dark") } ?: "system")
         }
 

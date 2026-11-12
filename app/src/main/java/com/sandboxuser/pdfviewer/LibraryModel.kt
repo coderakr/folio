@@ -11,6 +11,12 @@ import com.sandboxuser.pdfviewer.data.Book
 import com.sandboxuser.pdfviewer.data.LibraryStore
 import com.sandboxuser.pdfviewer.data.LibraryData
 import com.sandboxuser.pdfviewer.data.Folder
+import com.sandboxuser.pdfviewer.data.DirectoryScanner
+import com.sandboxuser.pdfviewer.data.DirectoryImportStopped
+import com.sandboxuser.pdfviewer.data.subtreeIds
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.snapshotFlow
@@ -24,6 +30,9 @@ class LibraryModel(application: Application) : AndroidViewModel(application) {
     var theme by mutableStateOf("system"); private set
     var loading by mutableStateOf(true); private set
     var importing by mutableStateOf(false); private set
+    var directoryProgress by mutableStateOf<String?>(null); private set
+    var directoryReport by mutableStateOf<String?>(null); private set
+    private val stopDirectory = AtomicBoolean(false)
     var error by mutableStateOf<String?>(null); private set
     var loadFailed by mutableStateOf(false); private set
     var saving by mutableStateOf(false); private set
@@ -63,17 +72,84 @@ class LibraryModel(application: Application) : AndroidViewModel(application) {
         if (loading || loadFailed || value !in listOf("system", "light", "dark")) return
         theme = value; persist()
     }
-    fun saveFolder(name: String, id: String? = null): Boolean {
+    fun saveFolder(name: String, id: String? = null, parentId: String? = null): Boolean {
         val title = name.trim()
-        if (loading || loadFailed || title.isEmpty() || folders.any { it.id != id && it.name.equals(title, true) }) return false
-        folders = if(id == null) folders + Folder(name = title) else folders.map { if(it.id == id) it.copy(name = title) else it }
+        val parent = if(id == null) parentId else folders.firstOrNull { it.id == id }?.parentId
+        if (loading || loadFailed || importing || title.isEmpty() || (parent != null && folders.none { it.id == parent }) ||
+            folders.any { it.id != id && it.parentId == parent && it.name.equals(title, true) }) return false
+        folders = if(id == null) folders + Folder(name = title, parentId = parent) else folders.map { if(it.id == id) it.copy(name = title) else it }
         persist(); return true
     }
     fun removeFolder(id: String) {
-        if (loading || loadFailed) return
-        folders = folders.filterNot { it.id == id }
-        books = books.map { if(it.folderId == id) it.copy(folderId = null) else it }
+        if (loading || loadFailed || importing) return
+        val removed = folders.subtreeIds(id)
+        folders = folders.filterNot { it.id in removed }
+        books = books.map { if(it.folderId in removed) it.copy(folderId = null) else it }
         persist()
+    }
+    fun dismissDirectoryReport() { directoryReport = null }
+    fun stopDirectoryImport() { stopDirectory.set(true) }
+    fun importDirectory(uri: Uri, parentId: String? = null) {
+        if(importing || loading || loadFailed) return
+        viewModelScope.launch {
+            importing = true; stopDirectory.set(false); directoryReport = null
+            directoryProgress = "Looking for PDFs and subfolders…"
+            var added = 0
+            var created = 0
+            var duplicates = 0
+            var ignored = 0
+            var failureCount = 0
+            var stopped = false
+            val details = mutableListOf<String>()
+            try {
+                val scan = DirectoryScanner(getApplication()).scan(uri, stopDirectory::get) { found ->
+                    withContext(Dispatchers.Main) { directoryProgress = "Scanning folders · $found PDFs found" }
+                }
+                ignored = scan.ignored
+                failureCount += scan.issues.size
+                details += scan.issues.take(20)
+                val destination = parentId?.takeIf { id -> folders.any { it.id == id } }
+                val mapping = mutableMapOf<String, String>()
+                val updated = folders.toMutableList()
+                for(source in scan.directories) {
+                    if(stopDirectory.get()) throw DirectoryImportStopped()
+                    val parent = source.parentKey?.let { mapping.getValue(it) } ?: destination
+                    val folder = updated.firstOrNull { it.parentId == parent && it.name == source.name }
+                        ?: Folder(name = source.name, parentId = parent).also { updated += it; created++ }
+                    mapping[source.key] = folder.id
+                }
+                folders = updated; persist()
+                for((index, source) in scan.pdfs.withIndex()) {
+                    if(stopDirectory.get()) throw DirectoryImportStopped()
+                    directoryProgress = "Importing ${index + 1} of ${scan.pdfs.size} · ${source.name}"
+                    try {
+                        val book = store.import(source.uri, stopDirectory::get)
+                        val target = mapping.getValue(source.directoryKey)
+                        // A document in two source folders belongs in both imported folders.
+                        // Re-importing the same folder skips existing PDFs and keeps their annotations.
+                        if(books.any { it.folderId == target && it.digest == book.digest && it.digest.isNotEmpty() }) {
+                            store.deleteFile(book.id); duplicates++
+                        } else {
+                            books = books + book.copy(folderId = target); added++; persist()
+                        }
+                    } catch(e: DirectoryImportStopped) { throw e }
+                    catch(e: CancellationException) { throw e }
+                    catch(e: Exception) {
+                        failureCount++
+                        if(details.size < 20) details += "${source.name}: ${if(e is SecurityException) "Locked or inaccessible PDF" else "Could not import this PDF"}"
+                    }
+                }
+            } catch(e: DirectoryImportStopped) { stopped = true }
+            catch(e: CancellationException) { throw e }
+            catch(e: Exception) { failureCount++; if(details.size < 20) details += (e.message ?: "Unable to read the selected folder.") }
+            finally { importing = false; directoryProgress = null }
+            directoryReport = buildString {
+                append(if(stopped) "Import stopped. Completed PDFs are kept.\n\n" else "Folder import finished.\n\n")
+                append("$added PDFs added · $created folders created\n")
+                append("$duplicates existing PDFs skipped · $ignored non-PDF files ignored")
+                if(failureCount > 0) append("\n\n$failureCount files or folders could not be imported:\n" + details.joinToString("\n") + if(failureCount > details.size) "\n…and ${failureCount - details.size} more." else "")
+            }
+        }
     }
     fun moveBook(id: String, folderId: String?) {
         if(folderId != null && folders.none { it.id == folderId }) return

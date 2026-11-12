@@ -14,6 +14,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -36,6 +43,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import com.sandboxuser.pdfviewer.data.Book
 import com.sandboxuser.pdfviewer.data.Folder
+import com.sandboxuser.pdfviewer.data.folderTrail
+import com.sandboxuser.pdfviewer.data.folderPath
 import com.sandboxuser.pdfviewer.data.LibraryStore
 import com.sandboxuser.pdfviewer.ui.theme.*
 
@@ -87,6 +96,7 @@ fun FolioApp(model: LibraryModel) {
     }
     val snack = remember { SnackbarHostState() }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { model.import(it, importFolder) }
+    val directoryPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> if(uri != null) model.importDirectory(uri, importFolder) }
     LaunchedEffect(model) { for (message in model.messages) snack.showSnackbar(message) }
     LaunchedEffect(model) { for(id in model.openRequests) { selected = id; jumpPage = null; fullscreen = false } }
     val book = model.books.firstOrNull { it.id == selected }
@@ -99,12 +109,15 @@ fun FolioApp(model: LibraryModel) {
                     Text(model.error.orEmpty()); Button(onClick = model::reload) { Text("Retry") }
                 }
                 book != null -> ReaderScreen(book, model, jumpPage, fullscreen, { fullscreen = it }, onBack = { selected = null; jumpPage = null; fullscreen = false })
-                else -> LibraryScreen(model, folderId, { folderId = it }, onAdd = { destination -> importFolder = destination; picker.launch(arrayOf("application/pdf")) }, onOpen = { b, page ->
+                else -> LibraryScreen(model, folderId, { folderId = it }, onAdd = { destination -> importFolder = destination; picker.launch(arrayOf("application/pdf")) }, onImportDirectory = { destination -> importFolder = destination; directoryPicker.launch(null) }, onOpen = { b, page ->
                     model.open(b.id); jumpPage = page; selected = b.id
                 })
             }
         }
     }
+    model.directoryReport?.let { report -> AlertDialog(onDismissRequest = model::dismissDirectoryReport,
+        title = { Text("Folder import") }, text = { Text(report, modifier = Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) },
+        confirmButton = { TextButton(onClick = model::dismissDirectoryReport) { Text("Done") } }) }
 }
 
 @Composable
@@ -115,9 +128,11 @@ fun IconAction(icon: String, label: String, tint: Color = Ink, enabled: Boolean 
 }
 
 @Composable
-fun LibraryScreen(model: LibraryModel, folderId: String?, onFolder: (String?) -> Unit, onAdd: (String?) -> Unit, onOpen: (Book, Int?) -> Unit) {
+fun LibraryScreen(model: LibraryModel, folderId: String?, onFolder: (String?) -> Unit, onAdd: (String?) -> Unit, onImportDirectory: (String?) -> Unit, onOpen: (Book, Int?) -> Unit) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
+    var folderGrid by rememberSaveable { mutableStateOf(true) }
+    val dark = LocalDarkMode.current
     var grid by rememberSaveable { mutableStateOf(false) }
     var sort by rememberSaveable { mutableIntStateOf(0) }
     var sortMenu by remember { mutableStateOf(false) }
@@ -126,75 +141,96 @@ fun LibraryScreen(model: LibraryModel, folderId: String?, onFolder: (String?) ->
     var removeBook by remember { mutableStateOf<Book?>(null) }
     var moveBook by remember { mutableStateOf<Book?>(null) }
     var rename by remember { mutableStateOf("") }
-    var info by remember { mutableStateOf(false) }
-    var appearance by remember { mutableStateOf(false) }
     var folderEditor by remember { mutableStateOf(false) }
     var folderName by remember { mutableStateOf("") }
     var editFolder by remember { mutableStateOf<Folder?>(null) }
     var folderError by remember { mutableStateOf(false) }
     var folderMenu by remember { mutableStateOf(false) }
+    var addMenu by remember { mutableStateOf(false) }
     var deleteFolder by remember { mutableStateOf(false) }
     val folder = model.folders.firstOrNull { it.id == folderId }
     val inFolder = tab == 0 && folder != null
-    BackHandler(inFolder) { onFolder(null); query = "" }
+    val children = model.folders.filter { it.parentId == if(inFolder) folderId else null }
+    BackHandler(inFolder) { onFolder(folder?.parentId); query = "" }
     val filtered = model.books.filter {
         (tab != 1 || it.favorite) && (!inFolder || it.folderId == folderId) && it.title.contains(query, true)
     }.let { when(sort) { 1 -> it.sortedBy { b -> b.title.lowercase() }; 2 -> it.sortedByDescending { b -> b.added }; else -> it.sortedByDescending { b -> b.opened } } }
     fun newFolder() { editFolder = null; folderName = ""; folderError = false; folderEditor = true }
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            if(inFolder) IconAction("back", "Back to all PDFs") { onFolder(null); query = "" }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            if(inFolder) IconAction("back", "Back to parent folder") { onFolder(folder?.parentId); query = "" }
             else Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(Terracotta), contentAlignment = Alignment.Center) { Glyph("book", MaterialTheme.colorScheme.onPrimary) }
-            Text("folio.", fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, fontSize = 27.sp, modifier = Modifier.padding(start = 9.dp).weight(1f))
-            IconAction(if(LocalDarkMode.current) "moon" else "sun", "Appearance", Muted) { appearance = true }
-            IconAction("shield", "About local storage", Muted) { info = true }
-            Button(onClick = { onAdd(if(inFolder) folderId else null) }, enabled = !model.importing, shape = RoundedCornerShape(12.dp), contentPadding = PaddingValues(horizontal = 12.dp), modifier = Modifier.height(42.dp)) {
-                if(model.importing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp) else Glyph("plus", MaterialTheme.colorScheme.onPrimary, Modifier.size(17.dp))
-                Text(if(model.importing) " Adding…" else " Add PDF", fontSize = 12.sp)
+            Spacer(Modifier.width(8.dp))
+            LibrarySearch(query, { query = it }, if(tab == 2) "Search PDFs or notes" else if(inFolder) "Search this folder" else "Search your PDFs", Modifier.weight(1f))
+            IconAction(if(dark) "moon" else "sun", "Appearance", Muted) { model.changeTheme(if(dark) "light" else "dark") }
+            Box {
+                Button(onClick = { addMenu = true }, enabled = !model.importing, shape = RoundedCornerShape(12.dp), contentPadding = PaddingValues(horizontal = 12.dp), modifier = Modifier.height(42.dp)) {
+                    if(model.importing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp) else Glyph("plus", MaterialTheme.colorScheme.onPrimary, Modifier.size(17.dp))
+                    Text(if(model.importing) " Adding…" else " Add", fontSize = 12.sp)
+                    Glyph("down", MaterialTheme.colorScheme.onPrimary, Modifier.size(15.dp))
+                }
+                DropdownMenu(addMenu, { addMenu = false }) {
+                    DropdownMenuItem(text = { Text("Add PDFs") }, onClick = { addMenu = false; onAdd(if(inFolder) folderId else null) })
+                    DropdownMenuItem(text = { Column { Text("Import folder"); Text("Includes PDFs and all subfolders", fontSize = 11.sp, color = Muted) } }, onClick = { addMenu = false; onImportDirectory(if(inFolder) folderId else null) })
+                }
+            }
+        }
+        model.directoryProgress?.let { progress ->
+            Row(Modifier.fillMaxWidth().background(Sage).padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                Text(progress, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
+                TextButton(onClick = model::stopDirectoryImport) { Text("Stop") }
             }
         }
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            item {
+            if(inFolder) item {
+                Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { onFolder(null); query = "" }, contentPadding = PaddingValues(horizontal = 4.dp)) { Text("Library", fontSize = 12.sp) }
+                    model.folders.folderTrail(folderId).forEach { ancestor ->
+                        Glyph("right", Muted, Modifier.size(13.dp))
+                        TextButton(onClick = { onFolder(ancestor.id); query = "" }, contentPadding = PaddingValues(horizontal = 4.dp)) { Text(ancestor.name, fontSize = 12.sp, maxLines = 1) }
+                    }
+                }
+            }
+            if(inFolder || tab != 0) item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(when { inFolder -> folder!!.name; tab == 1 -> "The keepers."; tab == 2 -> "Your thoughts."; else -> "Your little library." }, fontSize = 29.sp, fontFamily = FontFamily.Serif, lineHeight = 34.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(when { inFolder -> "${filtered.size} PDFs · A shelf of your own"; tab == 1 -> "Good reads, always within reach."; tab == 2 -> "Ideas you wanted to remember."; else -> "Less searching. More reading." }, fontSize = 13.sp, color = Muted, modifier = Modifier.padding(top = 5.dp))
+                        Text(when { inFolder -> folder!!.name; tab == 1 -> "The keepers."; tab == 2 -> "Your thoughts."; else -> "Library" }, fontSize = 29.sp, fontFamily = FontFamily.Serif, lineHeight = 34.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(when { inFolder -> "${filtered.size} PDFs · A shelf of your own"; tab == 1 -> "Good reads, always within reach."; tab == 2 -> "Ideas you wanted to remember."; else -> "" }, fontSize = 13.sp, color = Muted, modifier = Modifier.padding(top = 5.dp))
                     }
                     if(inFolder) Box {
                         IconAction("more", "Folder options") { folderMenu = true }
                         DropdownMenu(folderMenu, { folderMenu = false }) {
-                            DropdownMenuItem(text = { Text("Rename folder") }, onClick = { editFolder = folder; folderName = folder!!.name; folderError = false; folderEditor = true; folderMenu = false })
-                            DropdownMenuItem(text = { Text("Delete folder") }, onClick = { deleteFolder = true; folderMenu = false })
+                            DropdownMenuItem(text = { Text("Rename folder") }, enabled = !model.importing, onClick = { editFolder = folder; folderName = folder!!.name; folderError = false; folderEditor = true; folderMenu = false })
+                            DropdownMenuItem(text = { Text("Delete folder") }, enabled = !model.importing, onClick = { deleteFolder = true; folderMenu = false })
                         }
                     }
                 }
             }
-            item {
-                OutlinedTextField(query, { query = it }, placeholder = { Text(if(tab == 2) "Search PDFs or notes" else if(inFolder) "Search this folder" else "Search your PDFs", fontSize = 14.sp) },
-                    leadingIcon = { Glyph("search", Muted) }, trailingIcon = { if(query.isNotEmpty()) IconAction("close", "Clear search") { query = "" } },
-                    singleLine = true, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = Line, focusedBorderColor = Terracotta, unfocusedContainerColor = CardSurface))
-            }
-            if(tab == 0 && !inFolder && query.isBlank()) {
+            if(tab == 0 && query.isBlank()) {
                 item {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Your folders", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                            TextButton(onClick = { newFolder() }) { Glyph("plus", Terracotta, Modifier.size(16.dp)); Text(" New folder", fontSize = 12.sp) }
-                        }
-                        if(model.folders.isEmpty()) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Sage).clickable { newFolder() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Glyph("folder", Terracotta, Modifier.size(28.dp))
-                            Column(Modifier.padding(start = 12.dp)) { Text("A place for every subject", fontSize = 14.sp, fontWeight = FontWeight.Medium); Text("Create Science, Maths, Art, or your own.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
-                        } else Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            model.folders.forEach { f ->
-                                Column(Modifier.width(126.dp).clip(RoundedCornerShape(14.dp)).background(Sage).clickable { onFolder(f.id); query = "" }.padding(14.dp).semantics { contentDescription = "Open folder ${f.name}" }) {
-                                    Glyph("folder", Terracotta)
-                                    Text(f.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp))
-                                    Text("${model.books.count { it.folderId == f.id }} PDFs", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 3.dp))
-                                }
-                            }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(if(inFolder) "Subfolders" else "Your folders", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { newFolder() }, enabled = !model.importing) { Glyph("plus", Terracotta, Modifier.size(16.dp)); Text(" New folder", fontSize = 12.sp) }
+                        Box(Modifier.semantics { stateDescription = if(folderGrid) "Folders shown in a grid" else "Folders shown in a list" }) {
+                            IconAction(if(folderGrid) "list" else "grid", if(folderGrid) "Show folders as list" else "Show folders as grid", Muted) { folderGrid = !folderGrid }
                         }
                     }
+                }
+                if(children.isEmpty()) item {
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Sage).clickable(enabled = !model.importing) { newFolder() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Glyph("folder", Terracotta, Modifier.size(28.dp))
+                        Column(Modifier.padding(start = 12.dp)) { Text(if(inFolder) "Organise this section" else "A place for every subject", fontSize = 14.sp, fontWeight = FontWeight.Medium); Text(if(inFolder) "Create a subfolder or import a folder here." else "Create Science, Maths, Art, or your own.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
+                    }
+                } else if(folderGrid) items(children.chunked(2), key = { "folders-${it.first().id}" }) { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        pair.forEach { f ->
+                            FolderTile(f, model.books.count { it.folderId == f.id }, model.folders.count { it.parentId == f.id }, true, Modifier.weight(1f)) { onFolder(f.id); query = "" }
+                        }
+                        if(pair.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                } else items(children, key = { "folder-${it.id}" }) { f ->
+                    FolderTile(f, model.books.count { it.folderId == f.id }, model.folders.count { it.parentId == f.id }, false, Modifier.fillMaxWidth()) { onFolder(f.id); query = "" }
                 }
             }
             if(tab != 2) {
@@ -209,7 +245,7 @@ fun LibraryScreen(model: LibraryModel, folderId: String?, onFolder: (String?) ->
                         IconAction(if(grid) "list" else "grid", if(grid) "List view" else "Grid view", Muted) { grid = !grid }
                     }
                 }
-                if(filtered.isEmpty()) item { EmptyPanel(if(query.isNotEmpty()) "No matching reads" else if(inFolder) "Make room for a new read" else if(tab == 1) "Save your favourites" else "Your next read belongs here", if(inFolder) "Tap Add PDF to import directly into this folder. You can also move PDFs here from All PDFs." else if(tab == 1) "Tap the star on a PDF to keep it here." else "Add a PDF or try a different search.") }
+                if(filtered.isEmpty() && (!inFolder || children.isEmpty() || query.isNotEmpty())) item { EmptyPanel(if(query.isNotEmpty()) "No matching reads" else if(inFolder) "Make room for a new read" else if(tab == 1) "Save your favourites" else "Your next read belongs here", if(inFolder) "Use Add to import PDFs or a directory into this folder. You can also move PDFs here from All PDFs." else if(tab == 1) "Tap the star on a PDF to keep it here." else "Add a PDF or try a different search.") }
                 if(grid) items(filtered.chunked(2), key = { it.first().id }) { pair -> Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     pair.forEach { b -> Box(Modifier.weight(1f)) { BookCard(b, model.store, { onOpen(b, null) }, { model.update(b.id) { it.copy(favorite = !it.favorite) } }, { menuBook = b }) } }
                     if(pair.size == 1) Spacer(Modifier.weight(1f))
@@ -218,7 +254,7 @@ fun LibraryScreen(model: LibraryModel, folderId: String?, onFolder: (String?) ->
                         PdfCover(b, model.store, Modifier.width(46.dp).height(64.dp))
                         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                             Text(b.title, fontSize = 14.sp, lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
-                            val location = model.folders.firstOrNull { it.id == b.folderId }?.name ?: "Unfiled"
+                            val location = model.folders.folderPath(b.folderId)
                             Text("${b.pages} pages · $location", fontSize = 11.sp, color = Muted, modifier = Modifier.padding(top = 5.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             if(b.opened > 0) Text("Continue on page ${b.page + 1}", color = Terracotta, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
                         }
@@ -255,29 +291,56 @@ fun LibraryScreen(model: LibraryModel, folderId: String?, onFolder: (String?) ->
     moveBook?.let { b -> AlertDialog(onDismissRequest = { moveBook = null }, title = { Text("Move to folder") }, text = {
         LazyColumn(Modifier.heightIn(max = 360.dp)) {
             item { TextButton(onClick = { model.moveBook(b.id, null); moveBook = null }, modifier = Modifier.fillMaxWidth()) { Text("Unfiled (no folder)") } }
-            items(model.folders, key = { it.id }) { f -> TextButton(onClick = { model.moveBook(b.id, f.id); moveBook = null }, modifier = Modifier.fillMaxWidth()) { Glyph("folder", Terracotta); Text("  ${f.name}") } }
-            item { TextButton(onClick = { newFolder() }) { Text("+ Create a folder") } }
+            items(model.folders.sortedBy { model.folders.folderPath(it.id).lowercase() }, key = { it.id }) { f -> TextButton(onClick = { model.moveBook(b.id, f.id); moveBook = null }, modifier = Modifier.fillMaxWidth()) { Glyph("folder", Terracotta); Text("  ${model.folders.folderPath(f.id)}") } }
+            item { TextButton(onClick = { newFolder() }, enabled = !model.importing) { Text("+ Create a folder") } }
         }
     }, confirmButton = { TextButton(onClick = { moveBook = null }) { Text("Cancel") } }) }
     if(folderEditor) AlertDialog(onDismissRequest = { folderEditor = false }, title = { Text(if(editFolder == null) "New folder" else "Rename folder") }, text = { Column {
-        OutlinedTextField(folderName, { folderName = it.take(60); folderError = false }, label = { Text("Folder name") }, singleLine = true, isError = folderError, supportingText = { if(folderError) Text("Choose a different name. This folder already exists.") })
+        OutlinedTextField(folderName, { folderName = it.take(60); folderError = false }, label = { Text("Folder name") }, singleLine = true, isError = folderError, supportingText = { if(folderError) Text("A folder with this name already exists in this section.") })
         if(editFolder == null) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { listOf("Science", "Maths", "Art").forEach { name -> SuggestionChip(onClick = { folderName = name; folderError = false }, label = { Text(name, fontSize = 12.sp) }) } }
-    } }, confirmButton = { TextButton(enabled = folderName.isNotBlank(), onClick = { if(model.saveFolder(folderName, editFolder?.id)) folderEditor = false else folderError = true }) { Text(if(editFolder == null) "Create folder" else "Save") } }, dismissButton = { TextButton(onClick = { folderEditor = false }) { Text("Cancel") } })
-    if(deleteFolder && folder != null) AlertDialog(onDismissRequest = { deleteFolder = false }, title = { Text("Delete ${folder.name}?") }, text = { Text("Its PDFs and annotations will be kept in All PDFs as unfiled documents.") }, confirmButton = { TextButton(onClick = { model.removeFolder(folder.id); onFolder(null); deleteFolder = false }) { Text("Delete folder") } }, dismissButton = { TextButton(onClick = { deleteFolder = false }) { Text("Cancel") } })
+    } }, confirmButton = { TextButton(enabled = folderName.isNotBlank(), onClick = { if(model.saveFolder(folderName, editFolder?.id, if(inFolder) folderId else null)) folderEditor = false else folderError = true }) { Text(if(editFolder == null) "Create folder" else "Save") } }, dismissButton = { TextButton(onClick = { folderEditor = false }) { Text("Cancel") } })
+    if(deleteFolder && folder != null) AlertDialog(onDismissRequest = { deleteFolder = false }, title = { Text("Delete ${folder.name}?") }, text = { Text("This folder and all of its subfolders will be removed. All their PDFs and annotations will be kept in All PDFs as unfiled documents.") }, confirmButton = { TextButton(onClick = { model.removeFolder(folder.id); onFolder(folder.parentId); deleteFolder = false }) { Text("Delete folder") } }, dismissButton = { TextButton(onClick = { deleteFolder = false }) { Text("Cancel") } })
     renameBook?.let { b -> AlertDialog(onDismissRequest = { renameBook = null }, title = { Text("Rename PDF") }, text = { OutlinedTextField(rename, { rename = it.take(160) }, label = { Text("Title") }, singleLine = true) }, confirmButton = { TextButton(enabled = rename.isNotBlank(), onClick = { model.update(b.id) { it.copy(title = rename.trim()) }; renameBook = null }) { Text("Save") } }, dismissButton = { TextButton(onClick = { renameBook = null }) { Text("Cancel") } }) }
     removeBook?.let { b -> AlertDialog(onDismissRequest = { removeBook = null }, title = { Text("Remove this PDF?") }, text = { Text("“${b.title}” and its notes will be removed from your library. Your original downloaded file is unaffected.") }, confirmButton = { TextButton(onClick = { model.remove(b.id); removeBook = null }) { Text("Remove") } }, dismissButton = { TextButton(onClick = { removeBook = null }) { Text("Keep PDF") } }) }
-    if(appearance) AppearanceDialog(model) { appearance = false }
-    if(info) AlertDialog(onDismissRequest = { info = false }, title = { Text("A home for your PDFs") }, text = { Text("PDFs, folders, highlights, notes and reading progress are saved on this device. Your original PDFs stay untouched.\n\nOpen PDFs from other apps with Open with → Folio, or share a PDF to Folio to add it to your library.\n\nApp data can be lost if you clear storage or uninstall, so keep your original PDFs.") }, confirmButton = { TextButton(onClick = { info = false }) { Text("Got it") } })
 }
 
 @Composable
-fun AppearanceDialog(model: LibraryModel, onDismiss: () -> Unit) {
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("Appearance") }, text = { Column {
-        Text("Choose a comfortable reading space. Dark mode also dims PDF pages.", fontSize = 14.sp, color = Muted, modifier = Modifier.padding(bottom = 12.dp))
-        listOf("system" to "Use device setting", "light" to "Light", "dark" to "Dark").forEach { (id, label) ->
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { model.changeTheme(id) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) { RadioButton(selected = model.theme == id, onClick = { model.changeTheme(id) }); Text(label) }
-        }
-    } }, confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } })
+private fun LibrarySearch(query: String, onQuery: (String) -> Unit, label: String, modifier: Modifier = Modifier) {
+    val focus = LocalFocusManager.current
+    BasicTextField(query, onQuery, modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp))
+        .background(CardSurface).border(1.dp, Line, RoundedCornerShape(14.dp)).semantics { contentDescription = label },
+        singleLine = true, textStyle = MaterialTheme.typography.bodyMedium.copy(color = Ink), cursorBrush = SolidColor(Terracotta),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
+        decorationBox = { field ->
+            Row(Modifier.padding(horizontal = 10.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Glyph("search", Muted, Modifier.size(18.dp))
+                Spacer(Modifier.width(7.dp))
+                Box(Modifier.weight(1f)) {
+                    if(query.isEmpty()) Text("Search", color = Muted, fontSize = 14.sp, maxLines = 1)
+                    field()
+                }
+                if(query.isNotEmpty()) Box(Modifier.size(28.dp).clip(CircleShape).clickable { onQuery("") }.semantics { contentDescription = "Clear search" }, contentAlignment = Alignment.Center) { Glyph("close", Muted, Modifier.size(16.dp)) }
+            }
+        })
+}
+
+@Composable
+private fun FolderTile(folder: Folder, pdfCount: Int, childCount: Int, grid: Boolean, modifier: Modifier, onOpen: () -> Unit) {
+    val tile = modifier.clip(RoundedCornerShape(14.dp)).background(Sage).clickable(onClick = onOpen)
+        .semantics { contentDescription = "Open folder ${folder.name}" }.padding(16.dp)
+    val details: @Composable () -> Unit = {
+        Text(folder.name, maxLines = if(grid) 2 else 1, minLines = if(grid) 2 else 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
+        Text("$pdfCount PDFs · $childCount folders", color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
+    }
+    if(grid) Column(tile) {
+        Glyph("folder", Terracotta)
+        Spacer(Modifier.height(10.dp))
+        details()
+    } else Row(tile, verticalAlignment = Alignment.CenterVertically) {
+        Glyph("folder", Terracotta, Modifier.size(28.dp))
+        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) { details() }
+        Glyph("right", Muted, Modifier.size(18.dp))
+    }
 }
 
 @Composable

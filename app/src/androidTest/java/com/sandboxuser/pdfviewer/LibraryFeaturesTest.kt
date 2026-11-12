@@ -18,6 +18,7 @@ class LibraryFeaturesTest {
     private fun model() = ViewModelProvider(rule.activity)[LibraryModel::class.java]
     @Test fun foldersDarkModeAndFullscreenWorkTogether() {
         rule.waitUntil(15000) { !model().loading }
+        rule.runOnIdle { model().folders.filter { it.name == "Science" && it.parentId == null }.forEach { model().removeFolder(it.id) } }
         rule.onNodeWithText("New folder", substring = true).performClick()
         rule.onNodeWithText("Science", useUnmergedTree = true).performClick()
         rule.onNodeWithText("Create folder").performClick()
@@ -26,9 +27,9 @@ class LibraryFeaturesTest {
         rule.onNodeWithText("  Science").performClick()
         rule.onNodeWithContentDescription("Open folder Science").performClick()
         rule.onNodeWithText("A little guide to Folio").assertExists()
+        rule.runOnIdle { model().changeTheme("light") }
         rule.onNodeWithContentDescription("Appearance").performClick()
-        rule.onNodeWithText("Dark", useUnmergedTree = true).performClick()
-        rule.onNodeWithText("Done").performClick()
+        rule.onNodeWithText("Choose a comfortable reading space.", substring = true).assertDoesNotExist()
         rule.waitUntil { !model().saving }
         assertEquals("dark", runBlocking { model().store.loadState() }.theme)
         rule.onNodeWithText("A little guide to Folio").performClick()

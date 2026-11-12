@@ -4,5 +4,6 @@
         <provider android:name="com.sandboxuser.pdfviewer.SharedPdfTestProvider"
             android:authorities="com.sandboxuser.pdfviewer.test.sharedpdf"
             android:exported="true" android:grantUriPermissions="true" />
+        <provider android:name="com.sandboxuser.pdfviewer.TreeTestProvider" android:authorities="com.sandboxuser.pdfviewer.test.tree" android:exported="true" android:grantUriPermissions="true" />
     </application>
 </manifest>
