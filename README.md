@@ -40,7 +40,12 @@ Requires Android 9 (API 28) or newer. The project compiles with Android SDK 37.0
 
 ## APK releases with GitHub Actions
 
-[The release workflow](.github/workflows/release.yml) builds a signed release APK, runs release lint and JVM tests, verifies its signature, and publishes it with a SHA-256 checksum to GitHub Releases. It runs on version tags such as `v1.5`. You can also run **Actions → Build and release APK → Run workflow** and supply an existing tag. Manual runs build the tagged source, not the currently selected branch. The workflow file must be on the default branch to appear in the manual-run menu.
+[The workflow](.github/workflows/release.yml) runs on pushes to `main` and version tags, with two build paths:
+
+- **Push to `main`:** runs JVM tests and debug lint, builds a debug APK, and uploads it under **Actions → Build and release APK → completed run → Artifacts → folio-debug-<run number>**. No signing secrets are required. This does not publish a GitHub Release.
+- **Push a version tag such as `v1.5`:** builds a signed release APK, runs release lint and JVM tests, verifies its signature, and publishes it with a SHA-256 checksum to GitHub Releases. This requires the four signing secrets below.
+
+You can also use **Actions → Build and release APK → Run workflow**. Leave the tag blank to build a debug APK from the selected branch, or supply an existing version tag to publish its signed release. The workflow file must be on the default branch for the manual-run menu.
 
 ### One-time signing setup
 
@@ -61,7 +66,13 @@ In **GitHub repository → Settings → Secrets and variables → Actions**, add
 | `ANDROID_KEY_ALIAS` | Signing alias, e.g. `folio` |
 | `ANDROID_KEY_PASSWORD` | Key password (usually the same as the keystore password for PKCS12) |
 
-With the GitHub CLI authenticated, upload the keystore without printing its contents:
+To prepare the keystore value for the GitHub website, write its Base64 encoding to a local file and paste that file's contents into the `ANDROID_KEYSTORE_BASE64` secret:
+
+```sh
+base64 < "$HOME/.android/folio-signing/folio-release.jks" | tr -d '\n' > "$HOME/.android/folio-signing/folio-release.base64"
+```
+
+Alternatively, with the GitHub CLI authenticated, upload the keystore without printing its contents:
 
 ```sh
 base64 < "$HOME/.android/folio-signing/folio-release.jks" | tr -d '\n' | gh secret set ANDROID_KEYSTORE_BASE64
@@ -82,6 +93,14 @@ git push origin v1.5
 The release will contain `folio-v1.5.apk` and `folio-v1.5.apk.sha256`. Download both into one directory and run `sha256sum --check folio-v1.5.apk.sha256` to verify the download. The tag must match `versionName`; mismatches or missing signing secrets fail the workflow. The built-in `GITHUB_TOKEN` publishes the release; no personal access token is needed. Repository/organisation policy must allow the publishing job's `contents: write` permission.
 
 Publishing uses a draft until both files are uploaded. A retry can finish an interrupted draft; an already published release is left unchanged. Publish a new version tag for subsequent builds. Signed APKs are also retained as Actions artifacts for 14 days. Signing secrets and the decoded keystore are excluded from artifacts; the key is removed after the build, and signing builds disable Gradle's configuration cache.
+
+### If a workflow fails or does not start
+
+Commit and push this workflow change to `main` to start a debug build. Re-running an older failed job uses its older workflow definition; start a new run after pushing the fix.
+
+`Missing repository Actions secret: ANDROID_KEYSTORE_BASE64` means the release signing configuration is incomplete. Add **all four repository secrets**, not repository variables, under **Settings → Secrets and variables → Actions → New repository secret**. See [GitHub's secrets instructions](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets). A debug build from `main` remains available without them.
+
+The tag must also match the app version: the code currently has `versionName = "1.5"`, so a `v1.2` release run will fail the version check even after signing is configured. Commit the workflow fix, then create and push `v1.5` (or increment the app version and push its corresponding new tag). Keep existing published tags unchanged.
 
 Local debug builds need no secrets. Local release builds are unsigned unless `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD` are supplied as environment variables; use `--no-configuration-cache` when building with signing credentials.
 
