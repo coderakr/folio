@@ -33,6 +33,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
@@ -56,6 +58,8 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
     var originalColors by rememberSaveable(book.id) { mutableStateOf(false) }
     var fullControls by remember { mutableStateOf(true) }
     var page by rememberSaveable(book.id) { mutableIntStateOf((initialPage ?: book.page).coerceIn(0, book.pages - 1)) }
+    var quarterTurns by rememberSaveable(book.id) { mutableIntStateOf(0) }
+    val rotation = if(fullscreen) quarterTurns * 90 else 0
     var scrollMode by rememberSaveable(book.id) { mutableStateOf(false) }
     var scrollRequest by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     fun goToPage(target: Int) {
@@ -74,6 +78,7 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
     var editing by remember { mutableStateOf<Mark?>(null) }
     var noteText by remember { mutableStateOf("") }
     var draft by remember { mutableStateOf<List<Pair<Float, Float>>>(emptyList()) }
+    LaunchedEffect(rotation) { zoom = 1f; pan = Offset.Zero; draft = emptyList() }
     var bitmap by remember(book.id, page) { mutableStateOf<Bitmap?>(null) }
     var renderError by remember(book.id, page) { mutableStateOf(false) }
     var renderAttempt by remember { mutableIntStateOf(0) }
@@ -122,13 +127,14 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().background(ReaderBackground).clipToBounds(), contentAlignment = Alignment.Center) {
             val image = bitmap
             if(scrollMode) {
-                ScrollingPages(book, model, page, scrollRequest, dark && !originalColors,
+                ScrollingPages(book, model, page, scrollRequest, dark && !originalColors, rotation,
                     onPage = { page = it }, onNote = ::editNote, onTap = { if(fullscreen) fullControls = !fullControls })
             } else if(image != null) {
-                val ratio = image.width.toFloat() / image.height
+                val originalRatio = image.width.toFloat() / image.height
+                val ratio = if(rotation % 180 == 0) originalRatio else 1f / originalRatio
                 val pageWidth = minOf(maxWidth - 24.dp, (maxHeight - 24.dp) * ratio)
                 val pageHeight = pageWidth / ratio
-                Box(Modifier.fillMaxSize().pointerInput(tool, page) {
+                Box(Modifier.fillMaxSize().pointerInput(tool, page, rotation) {
                     if(tool == "read") awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
                         var travel = Offset.Zero
@@ -152,7 +158,7 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
                         }
                     }
                 }, contentAlignment = Alignment.Center) {
-                    Box(Modifier.size(pageWidth, pageHeight).graphicsLayer { scaleX = zoom; scaleY = zoom; translationX = pan.x; translationY = pan.y }.background(Color.White)) {
+                    RotatedPage(rotation, Modifier.size(pageWidth, pageHeight).testTag("PDF page surface ${page + 1}").graphicsLayer { scaleX = zoom; scaleY = zoom; translationX = pan.x; translationY = pan.y }) {
                         Image(image.asImageBitmap(), "PDF page ${page + 1} of ${book.pages}", Modifier.fillMaxSize(),
                             colorFilter = if(dark && !originalColors) ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
                                 -.78f,0f,0f,0f,223f, 0f,-.78f,0f,0f,228f, 0f,0f,-.78f,0f,219f, 0f,0f,0f,1f,0f
@@ -172,15 +178,16 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
                                     onDragEnd = { if(draft.size > 1) addMark(Mark(page = page, kind = tool, points = if(tool == "highlight") listOf(draft.first(), draft.last()) else draft, color = color)); draft = emptyList() },
                                     onDragCancel = { draft = emptyList() }
                                 )
-                            }.pointerInput(tool, page, currentMarks, fullscreen) {
+                            }.pointerInput(tool, page, currentMarks, fullscreen, rotation) {
                                 if(tool == "note" || tool == "read") detectTapGestures { point ->
                                     val x = point.x / size.width; val y = point.y / size.height
                                     val existing = currentMarks.lastOrNull { it.kind == "note" && it.points.any { p -> abs(p.first-x) < .06f && abs(p.second-y) < .04f } }
                                     if(existing != null) editNote(existing)
                                     else if(tool == "note") editNote(Mark(page = page, kind = "note", points = listOf(x to y)))
                                     else if(fullscreen) {
-                                        if(x < .2f && zoom == 1f && page > 0) goToPage(page - 1)
-                                        else if(x > .8f && zoom == 1f && page < book.pages - 1) goToPage(page + 1)
+                                        val screenX = when(rotation) { 90 -> 1f - y; 180 -> 1f - x; 270 -> y; else -> x }
+                                        if(screenX < .2f && zoom == 1f && page > 0) goToPage(page - 1)
+                                        else if(screenX > .8f && zoom == 1f && page < book.pages - 1) goToPage(page + 1)
                                         else fullControls = !fullControls
                                     }
                                 }
@@ -190,22 +197,33 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
                         }
                     }
                 }
-                if(zoom > 1f) TextButton(onClick = { zoom = 1f; pan = Offset.Zero }, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).background(Paper, RoundedCornerShape(12.dp))) { Text("Fit page") }
+                if(zoom > 1f) TextButton(onClick = { zoom = 1f; pan = Offset.Zero }, modifier = Modifier.align(if(fullscreen) Alignment.TopStart else Alignment.TopEnd).padding(8.dp).background(Paper, RoundedCornerShape(12.dp))) { Text("Fit page") }
             } else if(renderError) Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
                 Text("This page could not be displayed."); TextButton(onClick = { renderAttempt++ }) { Text("Try again") }
             } else CircularProgressIndicator()
             if(fullscreen) {
-                Box(Modifier.align(Alignment.TopEnd).padding(12.dp).background(Paper.copy(alpha = .92f), CircleShape)) {
+                Row(Modifier.align(Alignment.TopEnd).padding(12.dp).clip(RoundedCornerShape(24.dp)).background(Paper.copy(alpha = .92f)), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.semantics { stateDescription = "Rotated $rotation degrees clockwise" }) {
+                        IconAction("rotate", "Rotate pages clockwise") { quarterTurns = (quarterTurns + 1) % 4; fullControls = true }
+                    }
+                    Text("$rotation°", fontSize = 11.sp, color = Ink)
                     IconAction("collapse", "Exit full screen", onClick = { onFullscreen(false) })
                 }
-                if(fullControls) Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp).clip(RoundedCornerShape(24.dp)).background(Paper.copy(alpha = .94f)).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconAction("left", "Previous page", enabled = page > 0) { goToPage(page - 1) }
-                    TextButton(onClick = { pageInput = (page + 1).toString(); pageMenu = true }) { Text("${page + 1}  /  ${book.pages}", color = Ink) }
-                    IconAction("right", "Next page", enabled = page < book.pages - 1) { goToPage(page + 1) }
+                if(fullControls) Column(Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 12.dp).widthIn(max = 440.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Paper.copy(alpha = .94f)).padding(start = 12.dp, end = 12.dp, bottom = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconAction("left", "Previous page", enabled = page > 0) { goToPage(page - 1) }
+                        TextButton(onClick = { pageInput = (page + 1).toString(); pageMenu = true }) { Text("${page + 1}  /  ${book.pages}", color = Ink) }
+                        IconAction("right", "Next page", enabled = page < book.pages - 1) { goToPage(page + 1) }
+                    }
+                    PageScrubber(page, book.pages, onPageSelected = ::goToPage)
                 }
             }
         }
         if(!fullscreen) {
+        PageScrubber(page, book.pages, Modifier.padding(horizontal = 18.dp)) { target ->
+            draft = emptyList()
+            goToPage(target)
+        }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 0.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             IconAction("left", "Previous page", enabled = page > 0) { goToPage(page - 1); draft = emptyList() }
             TextButton(onClick = { pageInput = (page + 1).toString(); pageMenu = true }) { Text("${page + 1}  /  ${book.pages}", color = Ink, fontSize = 13.sp); Spacer(Modifier.width(5.dp)); Glyph("down", Muted, Modifier.size(14.dp)) }

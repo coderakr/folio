@@ -7,13 +7,13 @@ A native, offline Android PDF reader built with Kotlin and Jetpack Compose. Add 
 - Create nested subject folders at any depth (for example Science → Physics → Mechanics), with breadcrumbs and parent navigation. Move PDFs to any section. Deleting a folder and its subfolders keeps all their PDFs and annotations in All PDFs.
 - Import a device folder with all its subfolders and PDFs, preserving empty folders too. Progress, Stop, and a completion report handle large imports and unreadable files. Import again to add new PDFs while skipping identical PDFs already in the same section.
 - One-tap light/dark appearance switching, saved between launches (new installs initially follow the device setting). Dark mode also renders PDF pages in dark colours; Reader options can restore original PDF colours for photos or illustrations.
-- Full-screen reading hides system bars and annotation toolbars. Tap the sides of a page to change pages, tap the centre to toggle page controls, and use the top-right exit button or Android Back to return.
+- Full-screen reading hides system bars and annotation toolbars. The top-right rotate button turns the reading view clockwise through 0°, 90°, 180°, and 270° in both swipe and scroll modes, with annotations kept aligned. Rotation applies to all pages during the current reading session, survives activity recreation, and returns to an upright view outside full screen. PDF files are unchanged. Tap the sides of a page to change pages, tap the centre to toggle page controls, and use the top-right exit button or Android Back to return.
 - Open PDFs from WhatsApp, Files, email, and other apps using Android's PDF Open with menu, or share one or multiple PDFs to Folio. Shared PDFs are copied into the library and opened automatically; already imported PDFs reopen without duplicates.
 
 - Import one or several PDFs with Android's document picker. Folio keeps a private copy, so moving or deleting the downloaded original does not break your library.
 - PDF cover previews, title search, favourites, sorting, grid/list layouts, rename, and removal.
 - Swipe left/right between pages, or choose continuous vertical scrolling from Reader options. Both work in full screen and display saved annotations.
-- Resume the last page, jump to a page, bookmark pages, and pinch to zoom/pan in page view.
+- Resume the last page, jump to a page, bookmark pages, and pinch to zoom/pan in page view. A bottom page slider lets you jump anywhere in a document in swipe, scroll, and full-screen modes. Drag to preview a page number, then release to navigate; tapping the track also jumps. Tap the page counter for an exact page number.
 - Drag-to-highlight in four colours, freehand drawing, and editable notes pinned to a page.
 - Browse all annotations in My notes, or manage annotations within the reader. Undo removes the most recent annotation on the current page.
 - Automatically save annotations and reading progress without modifying the PDF or exporting new versions.
@@ -38,6 +38,53 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 Requires Android 9 (API 28) or newer. The project compiles with Android SDK 37.0 and uses the Gradle-managed Java 21 toolchain. `local.properties` should point to your local Android SDK.
 
+## APK releases with GitHub Actions
+
+[The release workflow](.github/workflows/release.yml) builds a signed release APK, runs release lint and JVM tests, verifies its signature, and publishes it with a SHA-256 checksum to GitHub Releases. It runs on version tags such as `v1.5`. You can also run **Actions → Build and release APK → Run workflow** and supply an existing tag. Manual runs build the tagged source, not the currently selected branch. The workflow file must be on the default branch to appear in the manual-run menu.
+
+### One-time signing setup
+
+Keep a permanent release keystore outside the repository. If you already have a signing key for a distributed Folio release, reuse it. Otherwise create one (the command prompts for passwords):
+
+```sh
+mkdir -p "$HOME/.android/folio-signing"
+keytool -genkeypair -v -keystore "$HOME/.android/folio-signing/folio-release.jks" \
+  -alias folio -keyalg RSA -keysize 3072 -validity 10000
+```
+
+In **GitHub repository → Settings → Secrets and variables → Actions**, add:
+
+| Secret | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | Base64-encoded contents of the keystore |
+| `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
+| `ANDROID_KEY_ALIAS` | Signing alias, e.g. `folio` |
+| `ANDROID_KEY_PASSWORD` | Key password (usually the same as the keystore password for PKCS12) |
+
+With the GitHub CLI authenticated, upload the keystore without printing its contents:
+
+```sh
+base64 < "$HOME/.android/folio-signing/folio-release.jks" | tr -d '\n' | gh secret set ANDROID_KEYSTORE_BASE64
+```
+
+Back up the keystore and passwords securely; future updates must use the same signing key. An existing debug APK uses a different certificate and cannot be updated directly with this release APK. Do not uninstall a library you want to keep: uninstalling can remove its PDFs and annotations. Use the same signing key as the installed app when continuity is required. See [Android app signing](https://developer.android.com/studio/publish/app-signing).
+
+### Publish a version
+
+Set `versionName` and increase `versionCode` in `app/build.gradle.kts`, commit the changes including the workflow, then push a matching tag. The current version is **1.5** (`versionCode = 6`):
+
+```sh
+git push origin HEAD
+git tag v1.5
+git push origin v1.5
+```
+
+The release will contain `folio-v1.5.apk` and `folio-v1.5.apk.sha256`. Download both into one directory and run `sha256sum --check folio-v1.5.apk.sha256` to verify the download. The tag must match `versionName`; mismatches or missing signing secrets fail the workflow. The built-in `GITHUB_TOKEN` publishes the release; no personal access token is needed. Repository/organisation policy must allow the publishing job's `contents: write` permission.
+
+Publishing uses a draft until both files are uploaded. A retry can finish an interrupted draft; an already published release is left unchanged. Publish a new version tag for subsequent builds. Signed APKs are also retained as Actions artifacts for 14 days. Signing secrets and the decoded keystore are excluded from artifacts; the key is removed after the build, and signing builds disable Gradle's configuration cache.
+
+Local debug builds need no secrets. Local release builds are unsigned unless `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD` are supplied as environment variables; use `--no-configuration-cache` when building with signing credentials.
+
 ## Verification
 
 ```sh
@@ -45,7 +92,7 @@ Requires Android 9 (API 28) or newer. The project compiles with Android SDK 37.0
 ./gradlew :app:connectedDebugAndroidTest
 ```
 
-The instrumented tests cover rendering, importing a durable private copy, invalid PDF cleanup, annotation/progress persistence, preserving PDF bytes, removal, corrupt-index protection, legacy-library migration, folders and appearance persistence, full-screen recreation and system-bar visibility, Android intent resolution, importing through an external test-APK content provider, duplicate-free reopening, reader interactions including activity recreation, recursive folder imports through a synthetic document tree, repeated-import deduplication, nested navigation and persistence, partial-copy cancellation cleanup, folder-schema migration, swipe/scroll reading modes, toolbar search, nested-folder view switching, and direct appearance toggling.
+The instrumented tests cover rendering, importing a durable private copy, invalid PDF cleanup, annotation/progress persistence, preserving PDF bytes, removal, corrupt-index protection, legacy-library migration, folders and appearance persistence, full-screen recreation and system-bar visibility, Android intent resolution, importing through an external test-APK content provider, duplicate-free reopening, reader interactions including activity recreation, recursive folder imports through a synthetic document tree, repeated-import deduplication, nested navigation and persistence, partial-copy cancellation cleanup, folder-schema migration, swipe/scroll reading modes, toolbar search, nested-folder view switching, direct appearance toggling, rotation with aligned annotations, slider preview/commit behaviour, accessible page jumps, single-page slider handling, and slider navigation/persistence in normal and full-screen reading modes.
 
 ## Storage and scope
 

@@ -23,6 +23,7 @@ fun Glyph(name: String, color: Color = Ink, modifier: Modifier = Modifier) {
                 "folder" -> line(3f,6f,3f,21f,21f,21f,21f,7f,12f,7f,10f,3f,3f,3f,3f,6f)
                 "fullscreen" -> { line(9f,3f,3f,3f,3f,9f); line(15f,3f,21f,3f,21f,9f); line(3f,15f,3f,21f,9f,21f); line(15f,21f,21f,21f,21f,15f) }
                 "collapse" -> { line(3f,9f,9f,9f,9f,3f); line(15f,3f,15f,9f,21f,9f); line(3f,15f,9f,15f,9f,21f); line(15f,21f,15f,15f,21f,15f) }
+                "rotate" -> { p.moveTo(20f,10f); p.cubicTo(19f,2f,5f,1f,3f,11f); p.cubicTo(1f,21f,16f,25f,20f,16f); line(15f,10f,21f,10f,21f,4f) }
                 "moon" -> { p.moveTo(18f,16f); p.cubicTo(5f,21f,3f,7f,11f,3f); p.cubicTo(-2f,3f,-1f,23f,12f,22f); p.quadraticTo(19f,22f,22f,15f); p.lineTo(18f,16f) }
                 "plus" -> { line(12f,5f,12f,19f); line(5f,12f,19f,12f) }
                 "close" -> { line(6f,6f,18f,18f); line(18f,6f,6f,18f) }
