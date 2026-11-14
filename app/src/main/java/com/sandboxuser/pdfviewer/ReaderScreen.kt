@@ -54,6 +54,7 @@ private val markColors = listOf(Color(0xFFF3C74E), Color(0xFF96BC88), Color(0xFF
 fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen: Boolean, onFullscreen: (Boolean) -> Unit, onBack: () -> Unit) {
     val dark = LocalDarkMode.current
     val accent = Terracotta
+    var themesMenu by remember { mutableStateOf(false) }
     var readerMenu by remember { mutableStateOf(false) }
     var originalColors by rememberSaveable(book.id) { mutableStateOf(false) }
     var fullControls by remember { mutableStateOf(true) }
@@ -112,6 +113,7 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
                     DropdownMenuItem(text = { Text("Notes & highlights") }, onClick = { marksMenu = true; readerMenu = false }, modifier = Modifier.semantics { contentDescription = "View notes and highlights" })
                     DropdownMenuItem(text = { Text(if(scrollMode) "Swipe pages" else "Scroll pages") }, onClick = { scrollRequest = null; scrollMode = !scrollMode; tool = "read"; readerMenu = false })
                     DropdownMenuItem(text = { Text("Appearance") }, onClick = { model.changeTheme(if(dark) "light" else "dark"); readerMenu = false })
+                    DropdownMenuItem(text = { Text("Colour themes") }, onClick = { themesMenu = true; readerMenu = false })
                     if(dark) DropdownMenuItem(text = { Text(if(originalColors) "Use dark PDF colours" else "Use original PDF colours") }, onClick = { originalColors = !originalColors; readerMenu = false })
                 }
             }
@@ -209,13 +211,10 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
                     Text("$rotation°", fontSize = 11.sp, color = Ink)
                     IconAction("collapse", "Exit full screen", onClick = { onFullscreen(false) })
                 }
-                if(fullControls) Column(Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 12.dp).widthIn(max = 440.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Paper.copy(alpha = .94f)).padding(start = 12.dp, end = 12.dp, bottom = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconAction("left", "Previous page", enabled = page > 0) { goToPage(page - 1) }
-                        TextButton(onClick = { pageInput = (page + 1).toString(); pageMenu = true }) { Text("${page + 1}  /  ${book.pages}", color = Ink) }
-                        IconAction("right", "Next page", enabled = page < book.pages - 1) { goToPage(page + 1) }
-                    }
-                    PageScrubber(page, book.pages, onPageSelected = ::goToPage)
+                if(fullControls) Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp).clip(RoundedCornerShape(24.dp)).background(Paper.copy(alpha = .94f)).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconAction("left", "Previous page", enabled = page > 0) { goToPage(page - 1) }
+                    TextButton(onClick = { pageInput = (page + 1).toString(); pageMenu = true }) { Text("${page + 1}  /  ${book.pages}", color = Ink) }
+                    IconAction("right", "Next page", enabled = page < book.pages - 1) { goToPage(page + 1) }
                 }
             }
         }
@@ -249,6 +248,7 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
         }
         if(model.saveFailed) TextButton(onClick = model::retrySave, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Retry save") }
     }
+    if(themesMenu) ThemePicker(model.palette, model::changePalette) { themesMenu = false }
     if(pageMenu) AlertDialog(onDismissRequest = { pageMenu = false }, title = { Text("Go to page") }, text = { OutlinedTextField(pageInput, { pageInput = it.filter(Char::isDigit).take(7) }, label = { Text("Page 1–${book.pages}") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, isError = pageInput.toIntOrNull()?.let { it !in 1..book.pages } ?: true) }, confirmButton = { TextButton(enabled = pageInput.toIntOrNull()?.let { it in 1..book.pages } == true, onClick = { goToPage(pageInput.toInt() - 1); pageMenu = false }) { Text("Go") } }, dismissButton = { TextButton(onClick = { pageMenu = false }) { Text("Cancel") } })
     editing?.let { mark ->
         AlertDialog(onDismissRequest = { editing = null }, title = { Text(if(book.marks.any { it.id == mark.id }) "Edit note" else "A thought to keep") }, text = {

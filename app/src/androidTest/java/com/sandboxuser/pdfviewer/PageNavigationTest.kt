@@ -22,7 +22,18 @@ class PageNavigationTest {
         rule.waitUntil(15000) { rule.onAllNodesWithContentDescription("PDF page $number of 3").fetchSemanticsNodes().isNotEmpty() }
     }
 
-    @Test fun sliderNavigatesSwipeScrollAndRotatedFullscreenAndRestoresPosition() {
+    private fun fullScreenJump(number: Int) {
+        rule.onNodeWithContentDescription("Jump to page").assertDoesNotExist()
+        val current = model.books.first { it.id == "folio-welcome" }.page + 1
+        rule.onNodeWithText("$current  /  3").performClick()
+        rule.onNode(hasSetTextAction()).performTextReplacement(number.toString())
+        rule.onNodeWithText("Go", substring = false).performClick()
+        rule.waitForIdle()
+        rule.waitUntil(15000) { model.books.first { it.id == "folio-welcome" }.page == number - 1 }
+        rule.onNodeWithContentDescription("Jump to page").assertDoesNotExist()
+    }
+
+    @Test fun sliderWorksOutsideFullscreenAndCompactFullscreenNavigationPersists() {
         model = ViewModelProvider(rule.activity)[LibraryModel::class.java]
         rule.waitUntil(15000) { !model.loading }
         val original = model.books.first { it.id == "folio-welcome" }
@@ -33,19 +44,21 @@ class PageNavigationTest {
             jump(3); jump(2)
             rule.onNodeWithContentDescription("Read in full screen").performClick()
             rule.onNodeWithContentDescription("Rotate pages clockwise").performClick()
-            jump(1); jump(3)
+            fullScreenJump(1); fullScreenJump(3)
             rule.waitForIdle()
             rule.activityRule.scenario.recreate()
             model = ViewModelProvider(rule.activity)[LibraryModel::class.java]
-            rule.onNodeWithText("Page 3").assertExists()
+            rule.onNodeWithText("3  /  3").assertExists()
+            rule.onNodeWithContentDescription("Jump to page").assertDoesNotExist()
             assertEquals(2, model.books.first { it.id == original.id }.page)
             rule.onNodeWithContentDescription("Exit full screen").performClick()
+            rule.onNodeWithContentDescription("Jump to page").assertIsDisplayed()
             rule.onNodeWithContentDescription("Reader options").performClick()
             rule.onNodeWithText("Scroll pages").performClick()
             jump(1); jump(3)
             rule.onNodeWithContentDescription("Read in full screen").performClick()
             // A sideways final page must remain selected even when shorter than the viewport.
-            jump(1); jump(3)
+            fullScreenJump(1); fullScreenJump(3)
             rule.waitForIdle()
             rule.waitUntil(15000) { !model.saving }
             assertEquals(2, kotlinx.coroutines.runBlocking { model.store.load() }.first { it.id == original.id }.page)

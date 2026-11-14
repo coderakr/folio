@@ -9,6 +9,7 @@ import com.sandboxuser.pdfviewer.data.LibraryStore
 import com.sandboxuser.pdfviewer.data.Mark
 import com.sandboxuser.pdfviewer.data.Folder
 import com.sandboxuser.pdfviewer.data.LibraryData
+import com.sandboxuser.pdfviewer.data.ColorTheme
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.*
@@ -30,6 +31,21 @@ class LibraryStoreTest {
         store = LibraryStore(context)
     }
     @After fun clean() { root.deleteRecursively() }
+
+    @Test fun palettesPersistWithoutLosingLibraryAndOlderFilesKeepOriginalTheme() = runBlocking {
+        val original = store.loadState()
+        for (palette in ColorTheme.entries) {
+            store.saveState(original.copy(theme = "dark", palette = palette))
+            val loaded = LibraryStore(context).loadState()
+            assertEquals(palette, loaded.palette)
+            assertEquals(original.books, loaded.books)
+            assertEquals("dark", loaded.theme)
+        }
+        val legacy = org.json.JSONObject(LibraryStore.encodeState(original)).apply { remove("palette") }
+        assertEquals(ColorTheme.FOLIO, LibraryStore.decodeState(legacy.toString()).palette)
+        legacy.put("palette", "future-unknown-theme")
+        assertEquals(ColorTheme.FOLIO, LibraryStore.decodeState(legacy.toString()).palette)
+    }
 
     @Test fun starterGuideIsARealRenderablePdf() = runBlocking {
         val guide = store.load().single()

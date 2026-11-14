@@ -20,6 +20,11 @@ fun Glyph(name: String, color: Color = Ink, modifier: Modifier = Modifier) {
             val p = Path()
             fun line(vararg xy: Float) { p.moveTo(xy[0], xy[1]); for (i in 2 until xy.size step 2) p.lineTo(xy[i], xy[i+1]) }
             when (name) {
+                "palette" -> {
+                    p.moveTo(20f,14f); p.cubicTo(27f,5f,15f,-2f,6f,4f); p.cubicTo(-3f,10f,3f,24f,12f,21f)
+                    p.cubicTo(17f,19f,9f,15f,15f,14f); p.lineTo(20f,14f)
+                    listOf(7f to 9f, 12f to 6f, 17f to 8f).forEach { (x,y) -> p.addOval(androidx.compose.ui.geometry.Rect(x-1,y-1,x+1,y+1)) }
+                }
                 "folder" -> line(3f,6f,3f,21f,21f,21f,21f,7f,12f,7f,10f,3f,3f,3f,3f,6f)
                 "fullscreen" -> { line(9f,3f,3f,3f,3f,9f); line(15f,3f,21f,3f,21f,9f); line(3f,15f,3f,21f,9f,21f); line(15f,21f,21f,21f,21f,15f) }
                 "collapse" -> { line(3f,9f,9f,9f,9f,3f); line(15f,3f,15f,9f,21f,9f); line(3f,15f,9f,15f,9f,21f); line(15f,21f,15f,15f,21f,15f) }

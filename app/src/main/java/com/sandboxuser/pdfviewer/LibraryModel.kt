@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.sandboxuser.pdfviewer.data.ColorTheme
 import com.sandboxuser.pdfviewer.data.Book
 import com.sandboxuser.pdfviewer.data.LibraryStore
 import com.sandboxuser.pdfviewer.data.LibraryData
@@ -28,6 +29,7 @@ class LibraryModel(application: Application) : AndroidViewModel(application) {
     var books by mutableStateOf<List<Book>>(emptyList()); private set
     var folders by mutableStateOf<List<Folder>>(emptyList()); private set
     var theme by mutableStateOf("system"); private set
+    var palette by mutableStateOf(ColorTheme.FOLIO); private set
     var loading by mutableStateOf(true); private set
     var importing by mutableStateOf(false); private set
     var directoryProgress by mutableStateOf<String?>(null); private set
@@ -53,11 +55,11 @@ class LibraryModel(application: Application) : AndroidViewModel(application) {
     }
     fun reload() { viewModelScope.launch {
         loading = true; error = null
-        try { val state = store.loadState(); books = state.books; folders = state.folders; theme = state.theme; loadFailed = false }
+        try { val state = store.loadState(); books = state.books; folders = state.folders; theme = state.theme; palette = state.palette; loadFailed = false }
         catch (e: Exception) { error = "Your library could not be loaded. Your files have not been changed."; loadFailed = true }
         loading = false
     } }
-    private fun persist() { revision++; saving = true; writes.trySend(revision to LibraryData(books, folders, theme)) }
+    private fun persist() { revision++; saving = true; writes.trySend(revision to LibraryData(books, folders, theme, palette)) }
     fun retrySave() = persist()
     fun update(id: String, transform: (Book) -> Book) {
         if (loading || loadFailed) return
@@ -67,6 +69,10 @@ class LibraryModel(application: Application) : AndroidViewModel(application) {
     fun remove(id: String) {
         // Save the index first. A failed save leaves the document recoverable.
         books = books.filterNot { it.id == id }; persist()
+    }
+    fun changePalette(value: ColorTheme) {
+        if (loading || loadFailed || palette == value) return
+        palette = value; persist()
     }
     fun changeTheme(value: String) {
         if (loading || loadFailed || value !in listOf("system", "light", "dark")) return

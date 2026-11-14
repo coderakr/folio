@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val model = ViewModelProvider(this)[LibraryModel::class.java]
         if(savedInstanceState == null) acceptPdfIntent(intent, model)
-        setContent { PdfviewerTheme(model.theme) { FolioApp(model) } }
+        setContent { PdfviewerTheme(model.theme, model.palette) { FolioApp(model) } }
     }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -129,6 +129,7 @@ fun IconAction(icon: String, label: String, tint: Color = Ink, enabled: Boolean 
 
 @Composable
 fun LibraryScreen(model: LibraryModel, folderId: String?, onFolder: (String?) -> Unit, onAdd: (String?) -> Unit, onImportDirectory: (String?) -> Unit, onOpen: (Book, Int?) -> Unit) {
+    var themesMenu by remember { mutableStateOf(false) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
     var folderGrid by rememberSaveable { mutableStateOf(true) }
@@ -281,8 +282,13 @@ fun LibraryScreen(model: LibraryModel, folderId: String?, onFolder: (String?) ->
                     Text(label, fontSize = 11.sp, lineHeight = 14.sp, color = if(tab == i) Terracotta else Muted, fontWeight = if(tab == i) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(top = 3.dp))
                 }
             }
+            Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable { themesMenu = true }.padding(vertical = 7.dp).semantics { contentDescription = "Choose colour theme" }, horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.width(56.dp).height(30.dp), contentAlignment = Alignment.Center) { Glyph("palette", Muted, Modifier.size(21.dp)) }
+                Text("Themes", fontSize = 11.sp, lineHeight = 14.sp, color = Muted, modifier = Modifier.padding(top = 3.dp))
+            }
         }
     }
+    if(themesMenu) ThemePicker(model.palette, model::changePalette) { themesMenu = false }
     menuBook?.let { b -> AlertDialog(onDismissRequest = { menuBook = null }, title = { Text(b.title) }, text = { Column {
         TextButton(onClick = { moveBook = b; menuBook = null }) { Glyph("folder", Terracotta); Text("  Move to folder") }
         TextButton(onClick = { rename = b.title; renameBook = b; menuBook = null }) { Glyph("pen", Terracotta); Text("  Rename PDF") }

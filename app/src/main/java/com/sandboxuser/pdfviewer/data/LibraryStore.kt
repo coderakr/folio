@@ -29,7 +29,7 @@ data class Book(val id: String, val title: String, val pages: Int, val bytes: Lo
     val digest: String = "", val folderId: String? = null)
 
 data class Folder(val id: String = UUID.randomUUID().toString(), val name: String, val parentId: String? = null)
-data class LibraryData(val books: List<Book> = emptyList(), val folders: List<Folder> = emptyList(), val theme: String = "system")
+data class LibraryData(val books: List<Book> = emptyList(), val folders: List<Folder> = emptyList(), val theme: String = "system", val palette: ColorTheme = ColorTheme.FOLIO)
 
 class LibraryStore(private val context: Context) {
     private val directory = File(context.filesDir, "library").apply { mkdirs() }
@@ -147,6 +147,7 @@ class LibraryStore(private val context: Context) {
                 put(JSONObject().put("id", folder.id).put("name", folder.name).put("parentId", folder.parentId ?: JSONObject.NULL))
             } })
             put("theme", state.theme)
+            put("palette", state.palette.id)
         }.toString()
         fun decodeState(raw: String): LibraryData {
             // Existing installations stored a bare book array. Migrate without changing PDFs or marks.
@@ -156,7 +157,8 @@ class LibraryStore(private val context: Context) {
             val folders = root.getJSONArray("folders")
             return LibraryData(decode(root.getJSONArray("books").toString()),
                 List(folders.length()) { folders.getJSONObject(it).let { f -> Folder(f.getString("id"), f.getString("name"), if(f.isNull("parentId")) null else f.getString("parentId")) } },
-                root.optString("theme", "system").takeIf { it in listOf("system", "light", "dark") } ?: "system")
+                root.optString("theme", "system").takeIf { it in listOf("system", "light", "dark") } ?: "system",
+                ColorTheme.fromId(root.optString("palette", "folio")))
         }
 
         fun encode(books: List<Book>): String = JSONArray().apply {
