@@ -20,6 +20,7 @@ fun Glyph(name: String, color: Color = Ink, modifier: Modifier = Modifier) {
             val p = Path()
             fun line(vararg xy: Float) { p.moveTo(xy[0], xy[1]); for (i in 2 until xy.size step 2) p.lineTo(xy[i], xy[i+1]) }
             when (name) {
+                "menu" -> { line(3f,5f,21f,5f); line(3f,12f,21f,12f); line(3f,19f,21f,19f) }
                 "palette" -> {
                     p.moveTo(20f,14f); p.cubicTo(27f,5f,15f,-2f,6f,4f); p.cubicTo(-3f,10f,3f,24f,12f,21f)
                     p.cubicTo(17f,19f,9f,15f,15f,14f); p.lineTo(20f,14f)

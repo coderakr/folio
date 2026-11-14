@@ -21,6 +21,7 @@ class ColorThemesTest {
         val originalMode = model.theme
         try {
             rule.runOnIdle { model.changeTheme("light"); model.changePalette(ColorTheme.FOLIO) }
+            rule.onNodeWithContentDescription("Open sidebar").performClick()
             rule.onNodeWithContentDescription("Choose colour theme").performClick()
             rule.onNodeWithContentDescription("Folio colour theme").assertIsSelected()
             for (palette in ColorTheme.entries) {
@@ -28,6 +29,7 @@ class ColorThemesTest {
                 rule.runOnIdle { assertEquals(palette, model.palette); assertEquals("light", model.theme) }
             }
             rule.onNodeWithText("Done").performClick()
+            rule.onNodeWithContentDescription("Open sidebar").performClick()
             rule.onNodeWithContentDescription("Appearance").performClick()
             rule.runOnIdle { assertEquals("dark", model.theme); assertEquals(ColorTheme.ROSE, model.palette) }
             rule.onNodeWithContentDescription("Choose colour theme").performClick()

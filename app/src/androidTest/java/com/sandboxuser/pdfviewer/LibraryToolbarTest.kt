@@ -40,6 +40,7 @@ class LibraryToolbarTest {
         rule.activityRule.scenario.recreate()
         rule.onNodeWithContentDescription("Show folders as grid").performClick()
         rule.onNodeWithContentDescription("Open folder References").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Open sidebar").performClick()
         rule.onNodeWithContentDescription("Appearance").performClick()
         rule.onNodeWithText("Use device setting").assertDoesNotExist()
         rule.waitUntil { !model.saving }
@@ -47,6 +48,7 @@ class LibraryToolbarTest {
         rule.onNodeWithContentDescription("Appearance").performClick()
         rule.waitUntil { !model.saving }
         assertEquals("light", runBlocking { model.store.loadState() }.theme)
+        rule.onNodeWithContentDescription("Close sidebar").performClick()
         rule.runOnIdle { model.removeFolder(root) }
         rule.onNodeWithText("A little guide to Folio").performClick()
         rule.onNodeWithContentDescription("Reader options").performClick()

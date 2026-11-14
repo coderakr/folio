@@ -19,7 +19,7 @@ class LibraryFeaturesTest {
     @Test fun foldersDarkModeAndFullscreenWorkTogether() {
         rule.waitUntil(15000) { !model().loading }
         rule.runOnIdle { model().folders.filter { it.name == "Science" && it.parentId == null }.forEach { model().removeFolder(it.id) } }
-        rule.onNodeWithText("New folder", substring = true).performClick()
+        rule.onNode(hasText("New folder", substring = true) and !hasContentDescription("Create folder here")).performClick()
         rule.onNodeWithText("Science", useUnmergedTree = true).performClick()
         rule.onNodeWithText("Create folder").performClick()
         rule.onNodeWithContentDescription("Options for A little guide to Folio").performClick()
@@ -28,7 +28,9 @@ class LibraryFeaturesTest {
         rule.onNodeWithContentDescription("Open folder Science").performClick()
         rule.onNodeWithText("A little guide to Folio").assertExists()
         rule.runOnIdle { model().changeTheme("light") }
+        rule.onNodeWithContentDescription("Open sidebar").performClick()
         rule.onNodeWithContentDescription("Appearance").performClick()
+        rule.onNodeWithContentDescription("Close sidebar").performClick()
         rule.onNodeWithText("Choose a comfortable reading space.", substring = true).assertDoesNotExist()
         rule.waitUntil { !model().saving }
         assertEquals("dark", runBlocking { model().store.loadState() }.theme)
