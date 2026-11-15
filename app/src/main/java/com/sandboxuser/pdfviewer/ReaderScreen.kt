@@ -118,8 +118,8 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
             }
         }
         HorizontalDivider(color = Line)
-        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(when(tool) { "highlight" -> "Drag across a line to highlight"; "ink" -> "Draw on the page with your finger"; "note" -> "Tap the page to leave a note"; else -> if(scrollMode) "Scroll vertically · Select a tool to annotate a page" else "Swipe pages · Pinch to zoom · Tap notes to edit" }, fontSize = 11.sp, color = Muted, modifier = Modifier.weight(1f))
+        if(tool != "read") Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(when(tool) { "highlight" -> "Drag across a line to highlight"; "ink" -> "Draw on the page with your finger"; "note" -> "Tap the page to leave a note"; else -> "" }, fontSize = 11.sp, color = Muted, modifier = Modifier.weight(1f))
             if(tool == "highlight" || tool == "ink") Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 markColors.forEachIndexed { i, c -> Box(Modifier.size(27.dp).clip(CircleShape).clickable { color = i }.border(if(color == i) 2.dp else 0.dp, if(color == i) Ink else Color.Transparent, CircleShape).padding(4.dp).background(c, CircleShape).semantics { contentDescription = "${listOf("Yellow", "Green", "Pink", "Blue")[i]} annotation colour" }) }
             }
@@ -135,7 +135,7 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
                 val ratio = if(rotation % 180 == 0) originalRatio else 1f / originalRatio
                 val pageWidth = minOf(maxWidth - 24.dp, (maxHeight - 24.dp) * ratio)
                 val pageHeight = pageWidth / ratio
-                Box(Modifier.fillMaxSize().pointerInput(tool, page, rotation, pageWidth, pageHeight) {
+                Box(Modifier.fillMaxSize().testTag("PDF zoom viewport ${page + 1}").semantics { stateDescription = "Zoom ${(zoom * 100).toInt()} percent" }.pointerInput(tool, page, rotation, pageWidth, pageHeight) {
                     if(tool == "read") awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
                         var travel = Offset.Zero
@@ -199,7 +199,7 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
                         }
                     }
                 }
-                if(zoom > 1f) TextButton(onClick = { zoom = 1f; pan = Offset.Zero }, modifier = Modifier.align(if(fullscreen) Alignment.TopStart else Alignment.TopEnd).padding(8.dp).background(Paper, RoundedCornerShape(12.dp))) { Text("Fit page") }
+                if(!fullscreen && zoom > 1f) TextButton(onClick = { zoom = 1f; pan = Offset.Zero }, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).background(Paper, RoundedCornerShape(12.dp))) { Text("Fit page") }
             } else if(renderError) Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
                 Text("This page could not be displayed."); TextButton(onClick = { renderAttempt++ }) { Text("Try again") }
             } else CircularProgressIndicator()

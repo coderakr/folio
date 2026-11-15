@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,6 +69,7 @@ internal fun ScrollingPages(book: Book, model: LibraryModel, initialPage: Int, r
                     val originalRatio = image?.let { it.width.toFloat() / it.height } ?: .75f
                     val displayRatio = if(rotation % 180 == 0) originalRatio else 1f / originalRatio
                     Box(Modifier.fillMaxWidth().aspectRatio(displayRatio).clipToBounds()
+                        .testTag("PDF zoom viewport ${index + 1}").semantics { stateDescription = "Zoom ${(if(zoomedPage == index) zoom * 100 else 100f).toInt()} percent" }
                         .background(pageColors.paper).pointerInput(index, rotation, fullscreen) {
                             awaitEachGesture {
                                 awaitFirstDown(requireUnconsumed = false)
@@ -111,7 +113,7 @@ internal fun ScrollingPages(book: Book, model: LibraryModel, initialPage: Int, r
                 }
             }
         }
-        if(zoom > 1f) TextButton(onClick = { zoom = 1f; pan = Offset.Zero; zoomedPage = null },
+        if(!fullscreen && zoom > 1f) TextButton(onClick = { zoom = 1f; pan = Offset.Zero; zoomedPage = null },
             modifier = Modifier.align(Alignment.TopStart).padding(8.dp).background(Paper, RoundedCornerShape(12.dp))) { Text("Fit page") }
 
     }

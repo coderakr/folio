@@ -1,58 +1,110 @@
-# Folio — your little PDF library
+<div align="center">
 
-A native, offline Android PDF reader built with Kotlin and Jetpack Compose. Add a PDF once and open it from your own library whenever you want to read.
+# Folio
 
-## Features
+**Your PDFs. Your shelves. Your reading space.**
 
-- Create nested subject folders at any depth (for example Science → Physics → Mechanics), with breadcrumbs and parent navigation. Move PDFs to any section. Deleting a folder and its subfolders keeps all their PDFs and annotations in All PDFs.
-- Import a device folder with all its subfolders and PDFs, preserving empty folders too. Progress, Stop, and a completion report handle large imports and unreadable files. Import again to add new PDFs while skipping identical PDFs already in the same section.
-- Choose Folio (the original theme), Ocean, Forest, Lavender, Rose, or Black using **Menu → Themes** in the library or **Reader options → Colour themes**. Each palette applies immediately and is saved. Black enables dark mode with a pure-black app background; turning dark mode off gives it a neutral light palette.
-- One-tap light/dark appearance switching, saved between launches (new installs initially follow the device setting). PDFs keep their original colours by default, independently of the app theme. Choose **Menu → PDF page background** or **Reader options → PDF page background** for Original PDF, Follow app theme, Sepia, or Black. The choice is saved for all PDFs. Follow app theme changes the page colours with both the palette and light/dark mode. Tints affect images too; Original PDF preserves their colours. Annotations and the underlying PDF file are unchanged.
-- Full-screen reading hides system bars and annotation toolbars. The top-right rotate button turns the reading view clockwise through 0°, 90°, 180°, and 270° in both swipe and scroll modes, with annotations kept aligned. Rotation applies to all pages during the current reading session, survives activity recreation, and returns to an upright view outside full screen. PDF files are unchanged. Tap the sides of a page to change pages, tap the centre to toggle page controls, and use the top-right exit button or Android Back to return.
-- Double-tap a page in full screen to zoom into the tapped area (2.5×), then double-tap again or use **Fit page** to reset. Works at all four rotations and in both swipe and scroll modes. Drag to pan while zoomed; in scroll mode, fit the page again to resume vertical scrolling. Pinch adjusts zoom up to 4×. Changing pages, rotation, or full-screen state resets zoom.
-- Open PDFs from WhatsApp, Files, email, and other apps using Android's PDF Open with menu, or share one or multiple PDFs to Folio. Shared PDFs are copied into the library and opened automatically; already imported PDFs reopen without duplicates.
+A quiet, offline PDF library for Android. Add a document once, organise it into folders, and pick up where you left off.
 
-- Import one or several PDFs with Android's document picker. Folio keeps a private copy, so moving or deleting the downloaded original does not break your library.
-- PDF cover previews, title search, favourites, sorting, grid/list layouts, rename, and removal.
-- Swipe left/right between pages, or choose continuous vertical scrolling from Reader options. Both work in full screen and display saved annotations.
-- Resume the last page, jump to a page, bookmark pages, and pinch to zoom/pan in page view. A thin bottom page slider lets you jump anywhere in a document in normal swipe and scroll modes. Full-screen reading keeps compact previous/next buttons and the tappable page counter, without a slider. Drag to preview a page number, then release to navigate; tapping the track also jumps. Tap the page counter for an exact page number.
-- Drag-to-highlight in four colours, freehand drawing, and editable notes pinned to a page.
-- Browse all annotations in My notes, or manage annotations within the reader. Undo removes the most recent annotation on the current page.
-- Automatically save annotations and reading progress without modifying the PDF or exporting new versions.
-- Includes a removable, original three-page Folio guide for trying the reader.
+[Download APK](https://github.com/coderakr/folio/releases/latest) · [Report an issue](https://github.com/coderakr/folio/issues) · [Build from source](#build-from-source)
 
-## Using the new controls
+**Android 9+ · Kotlin · Jetpack Compose · No account required**
 
-Tap **Add** to select PDFs, or open the top-left **Menu → Import folder** to import a directory. The sidebar groups **Themes**, a one-tap **Dark mode** switch, **PDF page background**, **New folder**, and **Import folder**. Folder actions use the location shown in the sidebar. Close it with the × button, Android Back, a swipe to the left, or a tap outside it; your current search and folder stay in place.
+</div>
 
-Open a section and choose **New folder** to create a subfolder, or import a directory directly into that section. Use a PDF's options menu → **Move to folder** to organise existing documents. Folder paths distinguish similarly named sections. Use the search field in the top bar to find PDFs or notes. Use the grid/list button beside **Your folders** or **Subfolders** to choose how folders are displayed; PDF layout has its own toggle. Library, Favourites, and My notes remain in the bottom navigation bar.
+<p align="center">
+  <img src="screenshots/home.png" alt="Folio home screen with subject folders, PDF search, and the library navigation bar" width="360" />
+</p>
+<p align="center"><em>The original Folio theme, with example subject folders and the included starter guide.</em></p>
 
-In the reader, use the expand icon for full-screen mode, and the three-dot menu to toggle appearance, choose themes, or browse annotations. Choose **Reader options → Scroll pages** for vertical reading, or **Swipe pages** to return to page view. Selecting Highlight, Draw, or Note from scroll mode opens the current page for annotation. The bottom bar is compact and kept above Android's system navigation area.
+## A home for your reading
 
-Android’s folder picker controls which locations are selectable; on Android 11 and later, storage roots and Downloads itself cannot be selected. Choose a subfolder inside Downloads or another accessible folder. Only PDFs are copied; non-PDF files are ignored. Stopping an import keeps completed copies, and the original folder is untouched. Imports continue through activity recreation while the app process remains alive.
+| | What you can do |
+| --- | --- |
+| **Build your library** | Add PDFs, create nested folders, or import an entire directory with its subfolders. |
+| **Find things quickly** | Search titles, save favourites, sort your books, and switch between grid and list views. |
+| **Read your way** | Swipe between pages or scroll continuously. Resume your last page, use bookmarks, or jump with the page slider. |
+| **Focus on the page** | Read full screen, rotate pages, and double-tap to zoom into the area you want to read. |
+| **Keep your thoughts** | Highlight passages, draw, and attach notes. Changes save automatically inside Folio. |
+| **Make it yours** | Choose six themes, light or dark mode, and a separate PDF page background. |
 
-After installing the update, choose **Folio** when another app offers **Open with** for a PDF. If an app uses its own built-in preview or another viewer is already the default, use its **Share** action and choose Folio. The sender must provide a readable PDF attachment.
+Folio keeps its own copy of imported PDFs, so moving the original download does not break your library. Open or share PDFs from WhatsApp, Files, email, and other apps directly into Folio.
 
-## Run
+## Start reading
 
-Open this folder in Android Studio and run the `app` configuration, or:
+1. Install the APK from [GitHub Releases](https://github.com/coderakr/folio/releases).
+2. Tap **Add** to select one or more PDFs. The included three-page Folio guide is ready to try immediately.
+3. Open **☰ → Import folder** to bring in a directory, or choose **New folder** to create a section. Open a folder first to add PDFs and subfolders inside it.
+4. Tap a PDF to read. Use its options menu to rename it, move it, or remove it from Folio.
+
+The bottom bar takes you to **Library**, **Favourites**, and **My notes**. The sidebar holds themes, dark mode, PDF backgrounds, and folder actions.
+
+### Reading controls
+
+- **Page navigation:** swipe left/right in page view, or choose **Reader options → Scroll pages** for continuous reading. The page counter lets you enter an exact page number; the thin slider jumps through the document outside full screen.
+- **Full screen:** tap the expand icon. Double-tap a page to zoom to 2.5× around that spot; double-tap again to reset. Drag to pan, or pinch to adjust zoom up to 4×. In scroll mode, reset zoom before scrolling to another page.
+- **Less clutter:** full screen has no slider or “Fit page” button. Tap the page centre to toggle the page-navigation controls. Rotate using the top-right control; exit with the collapse icon or Android Back.
+- **Annotations:** choose Highlight, Draw, or Note. Existing notes can be tapped to edit. Selecting an annotation tool in scroll mode opens the current page in page view.
+
+Rotation and double-tap zoom work together at 0°, 90°, 180°, and 270°. Changing pages, rotation, or full-screen state resets zoom. Outside full screen, **Fit page** remains available when zoomed.
+
+### Themes and PDF backgrounds
+
+Choose **☰ → Themes** for **Folio**, **Ocean**, **Forest**, **Lavender**, **Rose**, or **Black**. Selecting Black enables dark mode with a pure-black app background; the dark-mode switch can return it to a neutral light palette.
+
+Choose **☰ → PDF page background** or **Reader options → PDF page background**:
+
+| Background | Effect |
+| --- | --- |
+| **Original PDF** — default | Preserves the document’s own colours. Best for photos and diagrams. |
+| **Follow app theme** | Adapts page colours to your selected theme and light/dark mode. |
+| **Sepia** | Warm paper with dark text. |
+| **Black** | Black paper with light text. |
+
+Preferences are saved for future sessions. Background tints also affect images, but do not change annotation colours or rewrite the PDF.
+
+## Your files stay on your device
+
+No account, server, analytics, or network permission is required. PDFs and annotations live in the app’s private storage.
+
+- Annotations are saved as overlays inside Folio; no extra PDF is generated. Other PDF readers will not see those annotations.
+- Highlights are drawn regions, not selectable PDF text. Password-protected PDFs must be unlocked before import. Each imported file can be up to 300 MB.
+- Deleting a folder keeps its PDFs and annotations in **All PDFs**. Removing a PDF from Folio leaves its original source file untouched.
+- Uninstalling Folio or clearing app data can remove your library and notes. Keep the original PDFs as a backup.
+
+## Build from source
+
+Use Android Studio or a terminal with **JDK 21** and the **Android SDK 37.0** installed. Set the SDK path in `local.properties`; the Gradle wrapper is included.
 
 ```sh
 ./gradlew :app:assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Requires Android 9 (API 28) or newer. The project compiles with Android SDK 37.0 and uses the Gradle-managed Java 21 toolchain. `local.properties` should point to your local Android SDK.
+The app supports **Android 9 / API 28 and newer**. The debug APK is created at `app/build/outputs/apk/debug/app-debug.apk`.
 
-## APK releases with GitHub Actions
+### Architecture
 
-[The workflow](.github/workflows/release.yml) runs **only when a tag matching `v*` is pushed**, such as `v1.8`. Ordinary branch pushes do not start it, and there is no manual-run trigger.
+Folio is a native, single-activity app built with **Kotlin**, **Jetpack Compose**, and **Material 3**. `LibraryModel` manages UI state and serialises saves; `LibraryStore` imports private PDF copies and writes library metadata with Android’s `AtomicFile`. Android’s `PdfRenderer` renders pages on demand, and Compose draws annotations over them. Continuous reading uses a lazy list of pages. No backend is needed.
 
-A version-tag push runs JVM tests and release lint, builds and verifies a signed APK, and publishes it with a SHA-256 checksum to GitHub Releases. Configure the four signing secrets below before pushing a release tag. For a debug APK, build locally with `./gradlew :app:assembleDebug`.
+### Checks
 
-### One-time signing setup
+```sh
+./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
+# Requires a connected Android device or emulator:
+./gradlew :app:connectedDebugAndroidTest
+```
 
-Keep a permanent release keystore outside the repository. If you already have a signing key for a distributed Folio release, reuse it. Otherwise create one (the command prompts for passwords):
+Tests cover imports and nested folders, saved preferences, annotation persistence, unchanged PDF bytes, external-app intents, page navigation, rotation, backgrounds, and full-screen zoom in both reading modes.
+
+## Publish a release
+
+[GitHub Actions](.github/workflows/release.yml) runs **only when you push a tag matching `v*`**. Branch pushes do not start it, and there is no manual-run trigger. The workflow checks, signs, and publishes an APK with a SHA-256 checksum to [Releases](https://github.com/coderakr/folio/releases).
+
+<details>
+<summary><strong>One-time setup: configure release signing</strong></summary>
+
+Keep a permanent signing key outside the repository. Reuse the existing key if you have already distributed a signed release. Otherwise, create one; this command prompts for a password:
 
 ```sh
 mkdir -p "$HOME/.android/folio-signing"
@@ -60,66 +112,59 @@ keytool -genkeypair -v -keystore "$HOME/.android/folio-signing/folio-release.jks
   -alias folio -keyalg RSA -keysize 3072 -validity 10000
 ```
 
-In **GitHub repository → Settings → Secrets and variables → Actions**, add:
+Add these **repository secrets** under **Settings → Secrets and variables → Actions**:
 
 | Secret | Value |
 | --- | --- |
-| `ANDROID_KEYSTORE_BASE64` | Base64-encoded contents of the keystore |
+| `ANDROID_KEYSTORE_BASE64` | Base64-encoded keystore contents |
 | `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
-| `ANDROID_KEY_ALIAS` | Signing alias, e.g. `folio` |
-| `ANDROID_KEY_PASSWORD` | Key password (usually the same as the keystore password for PKCS12) |
+| `ANDROID_KEY_ALIAS` | Signing alias, such as `folio` |
+| `ANDROID_KEY_PASSWORD` | Key password; usually the keystore password for PKCS12 |
 
-To prepare the keystore value for the GitHub website, write its Base64 encoding to a local file and paste that file's contents into the `ANDROID_KEYSTORE_BASE64` secret:
+Prepare the Base64 value locally, then paste the file’s contents into the secret:
 
 ```sh
 base64 < "$HOME/.android/folio-signing/folio-release.jks" | tr -d '\n' > "$HOME/.android/folio-signing/folio-release.base64"
 ```
 
-Alternatively, with the GitHub CLI authenticated, upload the keystore without printing its contents:
+Or upload it using an authenticated GitHub CLI:
 
 ```sh
 base64 < "$HOME/.android/folio-signing/folio-release.jks" | tr -d '\n' | gh secret set ANDROID_KEYSTORE_BASE64
 ```
 
-Back up the keystore and passwords securely; future updates must use the same signing key. An existing debug APK uses a different certificate and cannot be updated directly with this release APK. Do not uninstall a library you want to keep: uninstalling can remove its PDFs and annotations. Use the same signing key as the installed app when continuity is required. See [Android app signing](https://developer.android.com/studio/publish/app-signing).
+Back up the key and passwords securely. Future updates must use the same signing key. A debug APK uses a different certificate and cannot be directly updated by a release APK; uninstalling it can remove its PDFs and notes.
 
-### Publish a version
+The workflow publishes with the built-in `GITHUB_TOKEN`; no personal access token is needed. Repository policy must allow the publishing job’s `contents: write` permission.
 
-Set `versionName` and increase `versionCode` in `app/build.gradle.kts`, commit the changes including the workflow, then push a matching tag. The current version is **1.8** (`versionCode = 9`):
+</details>
+
+Set `versionName` and increase `versionCode` in [app/build.gradle.kts](app/build.gradle.kts). Commit the app and workflow changes **before creating the tag**. The current version is **1.9** (`versionCode = 10`):
 
 ```sh
 git push origin HEAD
-git tag v1.8
-git push origin v1.8
+git tag v1.9
+git push origin v1.9
 ```
 
-The release will contain `folio-v1.8.apk` and `folio-v1.8.apk.sha256`. Download both into one directory and run `sha256sum --check folio-v1.8.apk.sha256` to verify the download. The tag must match `versionName`; mismatches or missing signing secrets fail the workflow. The built-in `GITHUB_TOKEN` publishes the release; no personal access token is needed. Repository/organisation policy must allow the publishing job's `contents: write` permission.
-
-Publishing uses a draft until both files are uploaded. A retry can finish an interrupted draft; an already published release is left unchanged. Publish a new version tag for subsequent builds. Signed APKs are also retained as Actions artifacts for 14 days. Signing secrets and the decoded keystore are excluded from artifacts; the key is removed after the build, and signing builds disable Gradle's configuration cache.
-
-### If a workflow fails or does not start
-
-Commit this workflow change before creating your next release tag, then push that tag. Pushing only `main` does not start a build. Re-running an older failed job uses its older workflow definition; workflow fixes must be included in a new version commit and matching tag. If only signing secrets changed, you can re-run the failed tag run from Actions.
-
-`Missing repository Actions secret: ANDROID_KEYSTORE_BASE64` means the release signing configuration is incomplete. Add **all four repository secrets**, not repository variables, under **Settings → Secrets and variables → Actions → New repository secret**. See [GitHub's secrets instructions](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets). Local debug builds need no signing secrets.
-
-The tag must also match the app version: the code currently has `versionName = "1.8"`, so a `v1.2` release run will fail the version check even after signing is configured. Commit the workflow fix, then create and push `v1.8` (or increment the app version and push its corresponding new tag). Keep existing published tags unchanged.
-
-Local debug builds need no secrets. Local release builds are unsigned unless `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD` are supplied as environment variables; use `--no-configuration-cache` when building with signing credentials.
-
-## Verification
+The tag must match `versionName`. A successful run publishes `folio-v1.9.apk` and `folio-v1.9.apk.sha256`. Download both and verify with:
 
 ```sh
-./gradlew :app:assembleDebug :app:lintDebug
-./gradlew :app:connectedDebugAndroidTest
+sha256sum --check folio-v1.9.apk.sha256
 ```
 
-The instrumented tests cover rendering, importing a durable private copy, invalid PDF cleanup, annotation/progress persistence, preserving PDF bytes, removal, corrupt-index protection, legacy-library migration, folders and appearance persistence, full-screen recreation and system-bar visibility, Android intent resolution, importing through an external test-APK content provider, duplicate-free reopening, reader interactions including activity recreation, recursive folder imports through a synthetic document tree, repeated-import deduplication, nested navigation and persistence, partial-copy cancellation cleanup, folder-schema migration, swipe/scroll reading modes, toolbar search, nested-folder view switching, direct appearance toggling, rotation with aligned annotations, slider preview/commit behaviour, accessible page jumps, single-page slider handling, and slider navigation in normal reading modes, compact full-screen navigation without a slider, palette selection in both appearances, and compatibility/persistence of theme preferences.
+A retry can finish an interrupted draft release; published downloads are left unchanged. Use a new version and tag for subsequent updates. Signed APKs are also available as Actions artifacts for 14 days.
 
-## Storage and scope
+<details>
+<summary><strong>Troubleshooting</strong></summary>
 
-PDF files are kept under the app's private `files/library` directory. A versioned-in-memory, serial write queue saves a versioned JSON document containing folders, appearance, library metadata and normalized annotation coordinates to `library.json` using Android's `AtomicFile`. The Android `PdfRenderer` renders pages on an IO dispatcher; reader pages and cover previews are loaded on demand; continuous reading uses a lazy list of pages.
+- **No workflow run:** push a new version tag, not just `main`. The tagged commit must include the workflow. Pushing an existing, unchanged tag does not start another run.
+- **Missing signing secrets:** add all four repository secrets listed above, then re-run the failed job. Local debug builds do not require signing secrets.
+- **Tag/version mismatch:** make sure the tagged commit’s `versionName` matches the tag. Keep published tags unchanged.
+- **A workflow fix is not picked up:** re-running an old job uses its old workflow. Include the fix in a new version commit and push its matching tag.
+- **Folder picker restrictions:** Android may prevent choosing storage roots or Downloads itself. Choose a subfolder. Imports include PDFs and nested folders; non-PDF files are ignored. Stopping an import keeps completed copies.
+- **Folio missing from “Open with”:** if the sending app uses its own viewer or another viewer is the default, use **Share → Folio**. The sender must provide a readable PDF attachment.
 
-Annotations are an app-local overlay, so they work without generating another PDF. Highlights are rectangular regions drawn by dragging, not selectable PDF text. Notes and marks are not embedded in PDFs for other readers. Annotation tools operate at fit-page scale; Read mode in page view supports zooming and panning. Continuous scroll displays marks and allows editing existing notes; choosing an annotation tool switches to page view. Password-protected PDFs must be unlocked before importing. Imports are limited to 300 MB per file.
+Local release builds are unsigned unless `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD` are set. Use `--no-configuration-cache` when building with signing credentials.
 
-There is no account, server, analytics, or network permission. Clearing app data or uninstalling may remove the library and annotations; retain original PDFs as a backup. Removing a book removes its private PDF copy and annotations after the updated index has been saved successfully, without touching the source download.
+</details>
