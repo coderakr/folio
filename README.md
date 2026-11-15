@@ -46,12 +46,9 @@ Requires Android 9 (API 28) or newer. The project compiles with Android SDK 37.0
 
 ## APK releases with GitHub Actions
 
-[The workflow](.github/workflows/release.yml) runs on pushes to `main` and version tags, with two build paths:
+[The workflow](.github/workflows/release.yml) runs **only when a tag matching `v*` is pushed**, such as `v1.8`. Ordinary branch pushes do not start it, and there is no manual-run trigger.
 
-- **Push to `main`:** runs JVM tests and debug lint, builds a debug APK, and uploads it under **Actions → Build and release APK → completed run → Artifacts → folio-debug-<run number>**. No signing secrets are required. This does not publish a GitHub Release.
-- **Push a version tag such as `v1.8`:** builds a signed release APK, runs release lint and JVM tests, verifies its signature, and publishes it with a SHA-256 checksum to GitHub Releases. This requires the four signing secrets below.
-
-You can also use **Actions → Build and release APK → Run workflow**. Leave the tag blank to build a debug APK from the selected branch, or supply an existing version tag to publish its signed release. The workflow file must be on the default branch for the manual-run menu.
+A version-tag push runs JVM tests and release lint, builds and verifies a signed APK, and publishes it with a SHA-256 checksum to GitHub Releases. Configure the four signing secrets below before pushing a release tag. For a debug APK, build locally with `./gradlew :app:assembleDebug`.
 
 ### One-time signing setup
 
@@ -102,9 +99,9 @@ Publishing uses a draft until both files are uploaded. A retry can finish an int
 
 ### If a workflow fails or does not start
 
-Commit and push this workflow change to `main` to start a debug build. Re-running an older failed job uses its older workflow definition; start a new run after pushing the fix.
+Commit this workflow change before creating your next release tag, then push that tag. Pushing only `main` does not start a build. Re-running an older failed job uses its older workflow definition; workflow fixes must be included in a new version commit and matching tag. If only signing secrets changed, you can re-run the failed tag run from Actions.
 
-`Missing repository Actions secret: ANDROID_KEYSTORE_BASE64` means the release signing configuration is incomplete. Add **all four repository secrets**, not repository variables, under **Settings → Secrets and variables → Actions → New repository secret**. See [GitHub's secrets instructions](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets). A debug build from `main` remains available without them.
+`Missing repository Actions secret: ANDROID_KEYSTORE_BASE64` means the release signing configuration is incomplete. Add **all four repository secrets**, not repository variables, under **Settings → Secrets and variables → Actions → New repository secret**. See [GitHub's secrets instructions](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets). Local debug builds need no signing secrets.
 
 The tag must also match the app version: the code currently has `versionName = "1.8"`, so a `v1.2` release run will fail the version check even after signing is configured. Commit the workflow fix, then create and push `v1.8` (or increment the app version and push its corresponding new tag). Keep existing published tags unchanged.
 
