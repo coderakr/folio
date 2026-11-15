@@ -25,6 +25,7 @@ internal fun LibrarySidebar(
     location: String,
     onClose: () -> Unit,
     onThemes: () -> Unit,
+    onPdfBackground: () -> Unit,
     onNewFolder: () -> Unit,
     onImportFolder: () -> Unit
 ) {
@@ -56,6 +57,11 @@ internal fun LibrarySidebar(
                 }
                 Switch(checked = dark, onCheckedChange = null)
             }
+            NavigationDrawerItem(
+                label = { Column { Text("PDF page background"); Text(model.pdfBackground.title, color = Muted, fontSize = 12.sp) } },
+                icon = { Glyph("book", Terracotta) }, selected = false, onClick = onPdfBackground,
+                modifier = Modifier.semantics { contentDescription = "Choose PDF background" }
+            )
             HorizontalDivider(Modifier.padding(vertical = 16.dp), color = Line)
             SidebarHeading("Organise")
             Text("In: $location", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))

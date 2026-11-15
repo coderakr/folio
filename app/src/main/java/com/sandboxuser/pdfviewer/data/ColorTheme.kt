@@ -6,7 +6,8 @@ enum class ColorTheme(val id: String, val title: String, val description: String
     OCEAN("ocean", "Ocean", "Cool blues & soft mist"),
     FOREST("forest", "Forest", "Leaf green & natural tones"),
     LAVENDER("lavender", "Lavender", "Soft violet & lilac"),
-    ROSE("rose", "Rose", "Dusty pink & warm blush");
+    ROSE("rose", "Rose", "Dusty pink & warm blush"),
+    BLACK("black", "Black", "Pure black · Turns on dark mode");
 
     companion object {
         fun fromId(id: String) = entries.firstOrNull { it.id == id } ?: FOLIO

@@ -35,6 +35,8 @@ internal data class ThemeColors(val scheme: ColorScheme, val readerBackground: C
 
 internal fun ColorTheme.colors(dark: Boolean): ThemeColors {
     if (this != ColorTheme.FOLIO) return when (this) {
+        ColorTheme.BLACK -> if(dark) paletteColors(true, 0xFFE0E0E0, 0xFF101010, 0xFF000000, 0xFF101010, 0xFFF2F2F2, 0xFFB8B8B8, 0xFF202020, 0xFF383838, 0xFF000000)
+            else paletteColors(false, 0xFF404040, 0xFFFFFFFF, 0xFFFAFAFA, 0xFFFFFFFF, 0xFF171717, 0xFF646464, 0xFFE8E8E8, 0xFFD5D5D5, 0xFFE0E0E0)
         ColorTheme.OCEAN -> if(dark) paletteColors(true, 0xFF8CCCF2, 0xFF10202D, 0xFF101C25, 0xFF192934, 0xFFE1EDF5, 0xFFA9BECD, 0xFF243C4D, 0xFF354D5D, 0xFF09131C)
             else paletteColors(false, 0xFF246388, 0xFFFFFFFF, 0xFFF3F8FC, 0xFFFCFEFF, 0xFF203443, 0xFF536B7D, 0xFFDDECF5, 0xFFD0DFEA, 0xFFE2EBF2)
         ColorTheme.FOREST -> if(dark) paletteColors(true, 0xFF96CBA3, 0xFF102D1A, 0xFF121E17, 0xFF1D2D22, 0xFFE3EFE4, 0xFFAFC3B2, 0xFF2B4131, 0xFF3C5141, 0xFF0B140E)

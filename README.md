@@ -6,9 +6,10 @@ A native, offline Android PDF reader built with Kotlin and Jetpack Compose. Add 
 
 - Create nested subject folders at any depth (for example Science → Physics → Mechanics), with breadcrumbs and parent navigation. Move PDFs to any section. Deleting a folder and its subfolders keeps all their PDFs and annotations in All PDFs.
 - Import a device folder with all its subfolders and PDFs, preserving empty folders too. Progress, Stop, and a completion report handle large imports and unreadable files. Import again to add new PDFs while skipping identical PDFs already in the same section.
-- Choose Folio (the original theme), Ocean, Forest, Lavender, or Rose using **Menu → Themes** in the library or **Reader options → Colour themes**. Each palette has light and dark variants, applies immediately across the app, and is saved separately from light/dark mode.
-- One-tap light/dark appearance switching, saved between launches (new installs initially follow the device setting). Dark mode also renders PDF pages in dark colours; Reader options can restore original PDF colours for photos or illustrations.
+- Choose Folio (the original theme), Ocean, Forest, Lavender, Rose, or Black using **Menu → Themes** in the library or **Reader options → Colour themes**. Each palette applies immediately and is saved. Black enables dark mode with a pure-black app background; turning dark mode off gives it a neutral light palette.
+- One-tap light/dark appearance switching, saved between launches (new installs initially follow the device setting). PDFs keep their original colours by default, independently of the app theme. Choose **Menu → PDF page background** or **Reader options → PDF page background** for Original PDF, Follow app theme, Sepia, or Black. The choice is saved for all PDFs. Follow app theme changes the page colours with both the palette and light/dark mode. Tints affect images too; Original PDF preserves their colours. Annotations and the underlying PDF file are unchanged.
 - Full-screen reading hides system bars and annotation toolbars. The top-right rotate button turns the reading view clockwise through 0°, 90°, 180°, and 270° in both swipe and scroll modes, with annotations kept aligned. Rotation applies to all pages during the current reading session, survives activity recreation, and returns to an upright view outside full screen. PDF files are unchanged. Tap the sides of a page to change pages, tap the centre to toggle page controls, and use the top-right exit button or Android Back to return.
+- Double-tap a page in full screen to zoom into the tapped area (2.5×), then double-tap again or use **Fit page** to reset. Works at all four rotations and in both swipe and scroll modes. Drag to pan while zoomed; in scroll mode, fit the page again to resume vertical scrolling. Pinch adjusts zoom up to 4×. Changing pages, rotation, or full-screen state resets zoom.
 - Open PDFs from WhatsApp, Files, email, and other apps using Android's PDF Open with menu, or share one or multiple PDFs to Folio. Shared PDFs are copied into the library and opened automatically; already imported PDFs reopen without duplicates.
 
 - Import one or several PDFs with Android's document picker. Folio keeps a private copy, so moving or deleting the downloaded original does not break your library.
@@ -22,7 +23,7 @@ A native, offline Android PDF reader built with Kotlin and Jetpack Compose. Add 
 
 ## Using the new controls
 
-Tap **Add** to select PDFs, or open the top-left **Menu → Import folder** to import a directory. The sidebar groups **Themes**, a one-tap **Dark mode** switch, **New folder**, and **Import folder**. Folder actions use the location shown in the sidebar. Close it with the × button, Android Back, a swipe to the left, or a tap outside it; your current search and folder stay in place.
+Tap **Add** to select PDFs, or open the top-left **Menu → Import folder** to import a directory. The sidebar groups **Themes**, a one-tap **Dark mode** switch, **PDF page background**, **New folder**, and **Import folder**. Folder actions use the location shown in the sidebar. Close it with the × button, Android Back, a swipe to the left, or a tap outside it; your current search and folder stay in place.
 
 Open a section and choose **New folder** to create a subfolder, or import a directory directly into that section. Use a PDF's options menu → **Move to folder** to organise existing documents. Folder paths distinguish similarly named sections. Use the search field in the top bar to find PDFs or notes. Use the grid/list button beside **Your folders** or **Subfolders** to choose how folders are displayed; PDF layout has its own toggle. Library, Favourites, and My notes remain in the bottom navigation bar.
 
@@ -48,7 +49,7 @@ Requires Android 9 (API 28) or newer. The project compiles with Android SDK 37.0
 [The workflow](.github/workflows/release.yml) runs on pushes to `main` and version tags, with two build paths:
 
 - **Push to `main`:** runs JVM tests and debug lint, builds a debug APK, and uploads it under **Actions → Build and release APK → completed run → Artifacts → folio-debug-<run number>**. No signing secrets are required. This does not publish a GitHub Release.
-- **Push a version tag such as `v1.7`:** builds a signed release APK, runs release lint and JVM tests, verifies its signature, and publishes it with a SHA-256 checksum to GitHub Releases. This requires the four signing secrets below.
+- **Push a version tag such as `v1.8`:** builds a signed release APK, runs release lint and JVM tests, verifies its signature, and publishes it with a SHA-256 checksum to GitHub Releases. This requires the four signing secrets below.
 
 You can also use **Actions → Build and release APK → Run workflow**. Leave the tag blank to build a debug APK from the selected branch, or supply an existing version tag to publish its signed release. The workflow file must be on the default branch for the manual-run menu.
 
@@ -87,15 +88,15 @@ Back up the keystore and passwords securely; future updates must use the same si
 
 ### Publish a version
 
-Set `versionName` and increase `versionCode` in `app/build.gradle.kts`, commit the changes including the workflow, then push a matching tag. The current version is **1.7** (`versionCode = 8`):
+Set `versionName` and increase `versionCode` in `app/build.gradle.kts`, commit the changes including the workflow, then push a matching tag. The current version is **1.8** (`versionCode = 9`):
 
 ```sh
 git push origin HEAD
-git tag v1.7
-git push origin v1.7
+git tag v1.8
+git push origin v1.8
 ```
 
-The release will contain `folio-v1.7.apk` and `folio-v1.7.apk.sha256`. Download both into one directory and run `sha256sum --check folio-v1.7.apk.sha256` to verify the download. The tag must match `versionName`; mismatches or missing signing secrets fail the workflow. The built-in `GITHUB_TOKEN` publishes the release; no personal access token is needed. Repository/organisation policy must allow the publishing job's `contents: write` permission.
+The release will contain `folio-v1.8.apk` and `folio-v1.8.apk.sha256`. Download both into one directory and run `sha256sum --check folio-v1.8.apk.sha256` to verify the download. The tag must match `versionName`; mismatches or missing signing secrets fail the workflow. The built-in `GITHUB_TOKEN` publishes the release; no personal access token is needed. Repository/organisation policy must allow the publishing job's `contents: write` permission.
 
 Publishing uses a draft until both files are uploaded. A retry can finish an interrupted draft; an already published release is left unchanged. Publish a new version tag for subsequent builds. Signed APKs are also retained as Actions artifacts for 14 days. Signing secrets and the decoded keystore are excluded from artifacts; the key is removed after the build, and signing builds disable Gradle's configuration cache.
 
@@ -105,7 +106,7 @@ Commit and push this workflow change to `main` to start a debug build. Re-runnin
 
 `Missing repository Actions secret: ANDROID_KEYSTORE_BASE64` means the release signing configuration is incomplete. Add **all four repository secrets**, not repository variables, under **Settings → Secrets and variables → Actions → New repository secret**. See [GitHub's secrets instructions](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets). A debug build from `main` remains available without them.
 
-The tag must also match the app version: the code currently has `versionName = "1.7"`, so a `v1.2` release run will fail the version check even after signing is configured. Commit the workflow fix, then create and push `v1.7` (or increment the app version and push its corresponding new tag). Keep existing published tags unchanged.
+The tag must also match the app version: the code currently has `versionName = "1.8"`, so a `v1.2` release run will fail the version check even after signing is configured. Commit the workflow fix, then create and push `v1.8` (or increment the app version and push its corresponding new tag). Keep existing published tags unchanged.
 
 Local debug builds need no secrets. Local release builds are unsigned unless `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD` are supplied as environment variables; use `--no-configuration-cache` when building with signing credentials.
 

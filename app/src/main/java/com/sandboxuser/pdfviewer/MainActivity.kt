@@ -131,6 +131,7 @@ fun IconAction(icon: String, label: String, tint: Color = Ink, enabled: Boolean 
 @Composable
 fun LibraryScreen(model: LibraryModel, folderId: String?, onFolder: (String?) -> Unit, onAdd: (String?) -> Unit, onImportDirectory: (String?) -> Unit, onOpen: (Book, Int?) -> Unit) {
     var themesMenu by remember { mutableStateOf(false) }
+    var pdfBackgroundMenu by remember { mutableStateOf(false) }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val focus = LocalFocusManager.current
@@ -169,6 +170,7 @@ fun LibraryScreen(model: LibraryModel, folderId: String?, onFolder: (String?) ->
                 location = if(inFolder) model.folders.folderPath(folderId) else "Library",
                 onClose = { scope.launch { drawer.close() } },
                 onThemes = { afterClosingDrawer { themesMenu = true } },
+                onPdfBackground = { afterClosingDrawer { pdfBackgroundMenu = true } },
                 onNewFolder = { afterClosingDrawer { newFolder() } },
                 onImportFolder = { afterClosingDrawer { onImportDirectory(if(inFolder) folderId else null) } }
             )
@@ -299,6 +301,7 @@ fun LibraryScreen(model: LibraryModel, folderId: String?, onFolder: (String?) ->
     }
     // Register after folder navigation so Back dismisses the drawer before leaving a folder.
     BackHandler(drawer.isOpen) { scope.launch { drawer.close() } }
+    if(pdfBackgroundMenu) PdfBackgroundPicker(model.pdfBackground, model::changePdfBackground) { pdfBackgroundMenu = false }
     if(themesMenu) ThemePicker(model.palette, model::changePalette) { themesMenu = false }
     menuBook?.let { b -> AlertDialog(onDismissRequest = { menuBook = null }, title = { Text(b.title) }, text = { Column {
         TextButton(onClick = { moveBook = b; menuBook = null }) { Glyph("folder", Terracotta); Text("  Move to folder") }

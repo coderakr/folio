@@ -19,8 +19,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.graphics.Color
@@ -56,7 +54,8 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
     val accent = Terracotta
     var themesMenu by remember { mutableStateOf(false) }
     var readerMenu by remember { mutableStateOf(false) }
-    var originalColors by rememberSaveable(book.id) { mutableStateOf(false) }
+    var pdfBackgroundMenu by remember { mutableStateOf(false) }
+    val pageColors = model.pdfBackground.pageColors()
     var fullControls by remember { mutableStateOf(true) }
     var page by rememberSaveable(book.id) { mutableIntStateOf((initialPage ?: book.page).coerceIn(0, book.pages - 1)) }
     var quarterTurns by rememberSaveable(book.id) { mutableIntStateOf(0) }
@@ -79,7 +78,7 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
     var editing by remember { mutableStateOf<Mark?>(null) }
     var noteText by remember { mutableStateOf("") }
     var draft by remember { mutableStateOf<List<Pair<Float, Float>>>(emptyList()) }
-    LaunchedEffect(rotation) { zoom = 1f; pan = Offset.Zero; draft = emptyList() }
+    LaunchedEffect(rotation, fullscreen) { zoom = 1f; pan = Offset.Zero; draft = emptyList() }
     var bitmap by remember(book.id, page) { mutableStateOf<Bitmap?>(null) }
     var renderError by remember(book.id, page) { mutableStateOf(false) }
     var renderAttempt by remember { mutableIntStateOf(0) }
@@ -114,7 +113,7 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
                     DropdownMenuItem(text = { Text(if(scrollMode) "Swipe pages" else "Scroll pages") }, onClick = { scrollRequest = null; scrollMode = !scrollMode; tool = "read"; readerMenu = false })
                     DropdownMenuItem(text = { Text("Appearance") }, onClick = { model.changeTheme(if(dark) "light" else "dark"); readerMenu = false })
                     DropdownMenuItem(text = { Text("Colour themes") }, onClick = { themesMenu = true; readerMenu = false })
-                    if(dark) DropdownMenuItem(text = { Text(if(originalColors) "Use dark PDF colours" else "Use original PDF colours") }, onClick = { originalColors = !originalColors; readerMenu = false })
+                    DropdownMenuItem(text = { Text("PDF page background") }, onClick = { pdfBackgroundMenu = true; readerMenu = false })
                 }
             }
         }
@@ -129,14 +128,14 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().background(ReaderBackground).clipToBounds(), contentAlignment = Alignment.Center) {
             val image = bitmap
             if(scrollMode) {
-                ScrollingPages(book, model, page, scrollRequest, dark && !originalColors, rotation,
+                ScrollingPages(book, model, page, scrollRequest, pageColors, rotation, fullscreen,
                     onPage = { page = it }, onNote = ::editNote, onTap = { if(fullscreen) fullControls = !fullControls })
             } else if(image != null) {
                 val originalRatio = image.width.toFloat() / image.height
                 val ratio = if(rotation % 180 == 0) originalRatio else 1f / originalRatio
                 val pageWidth = minOf(maxWidth - 24.dp, (maxHeight - 24.dp) * ratio)
                 val pageHeight = pageWidth / ratio
-                Box(Modifier.fillMaxSize().pointerInput(tool, page, rotation) {
+                Box(Modifier.fillMaxSize().pointerInput(tool, page, rotation, pageWidth, pageHeight) {
                     if(tool == "read") awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
                         var travel = Offset.Zero
@@ -149,9 +148,7 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
                             travel += delta
                             if(multiple || startedZoomed) {
                                 zoom = (zoom * event.calculateZoom()).coerceIn(1f, 4f)
-                                val limitX = size.width * (zoom - 1) / 2
-                                val limitY = size.height * (zoom - 1) / 2
-                                pan = Offset((pan.x + delta.x).coerceIn(-limitX, limitX), (pan.y + delta.y).coerceIn(-limitY, limitY))
+                                pan = clampPagePan(pan + delta, pageWidth.toPx(), pageHeight.toPx(), zoom)
                             }
                             if(travel.getDistance() > viewConfiguration.touchSlop || multiple) event.changes.forEach { it.consume() }
                         } while(event.changes.any { it.pressed })
@@ -162,9 +159,7 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
                 }, contentAlignment = Alignment.Center) {
                     RotatedPage(rotation, Modifier.size(pageWidth, pageHeight).testTag("PDF page surface ${page + 1}").graphicsLayer { scaleX = zoom; scaleY = zoom; translationX = pan.x; translationY = pan.y }) {
                         Image(image.asImageBitmap(), "PDF page ${page + 1} of ${book.pages}", Modifier.fillMaxSize(),
-                            colorFilter = if(dark && !originalColors) ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
-                                -.78f,0f,0f,0f,223f, 0f,-.78f,0f,0f,228f, 0f,0f,-.78f,0f,219f, 0f,0f,0f,1f,0f
-                            ))) else null)
+                            colorFilter = pageColors.filter())
                         Canvas(Modifier.fillMaxSize().semantics {
                             contentDescription = "Page annotation canvas"
                             if(fullscreen) customActions = listOf(
@@ -181,7 +176,12 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
                                     onDragCancel = { draft = emptyList() }
                                 )
                             }.pointerInput(tool, page, currentMarks, fullscreen, rotation) {
-                                if(tool == "note" || tool == "read") detectTapGestures { point ->
+                                if(tool == "note" || tool == "read") detectTapGestures(
+                                    onDoubleTap = if(fullscreen && tool == "read") { point ->
+                                        if(zoom > 1f) { zoom = 1f; pan = Offset.Zero }
+                                        else { zoom = 2.5f; pan = focusedPagePan(point, size, rotation, zoom) }
+                                    } else null,
+                                    onTap = { point ->
                                     val x = point.x / size.width; val y = point.y / size.height
                                     val existing = currentMarks.lastOrNull { it.kind == "note" && it.points.any { p -> abs(p.first-x) < .06f && abs(p.second-y) < .04f } }
                                     if(existing != null) editNote(existing)
@@ -192,7 +192,7 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
                                         else if(screenX > .8f && zoom == 1f && page < book.pages - 1) goToPage(page + 1)
                                         else fullControls = !fullControls
                                     }
-                                }
+                                })
                             }) {
                             currentMarks.forEach { drawAnnotation(it, accent) }
                             if(draft.isNotEmpty()) drawAnnotation(Mark(page = page, kind = tool, points = draft, color = color), accent)
@@ -248,6 +248,7 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
         }
         if(model.saveFailed) TextButton(onClick = model::retrySave, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Retry save") }
     }
+    if(pdfBackgroundMenu) PdfBackgroundPicker(model.pdfBackground, model::changePdfBackground) { pdfBackgroundMenu = false }
     if(themesMenu) ThemePicker(model.palette, model::changePalette) { themesMenu = false }
     if(pageMenu) AlertDialog(onDismissRequest = { pageMenu = false }, title = { Text("Go to page") }, text = { OutlinedTextField(pageInput, { pageInput = it.filter(Char::isDigit).take(7) }, label = { Text("Page 1–${book.pages}") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, isError = pageInput.toIntOrNull()?.let { it !in 1..book.pages } ?: true) }, confirmButton = { TextButton(enabled = pageInput.toIntOrNull()?.let { it in 1..book.pages } == true, onClick = { goToPage(pageInput.toInt() - 1); pageMenu = false }) { Text("Go") } }, dismissButton = { TextButton(onClick = { pageMenu = false }) { Text("Cancel") } })
     editing?.let { mark ->

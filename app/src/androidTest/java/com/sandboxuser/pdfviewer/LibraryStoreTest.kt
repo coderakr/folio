@@ -47,6 +47,18 @@ class LibraryStoreTest {
         assertEquals(ColorTheme.FOLIO, LibraryStore.decodeState(legacy.toString()).palette)
     }
 
+    @Test fun pdfBackgroundPersistsAndMissingOrUnknownSettingsUseOriginal() = runBlocking {
+        val original = store.loadState()
+        for(background in com.sandboxuser.pdfviewer.data.PdfBackground.entries) {
+            store.saveState(original.copy(pdfBackground = background))
+            assertEquals(background, LibraryStore(context).loadState().pdfBackground)
+        }
+        val legacy = org.json.JSONObject(LibraryStore.encodeState(original)).apply { remove("pdfBackground") }
+        assertEquals(com.sandboxuser.pdfviewer.data.PdfBackground.ORIGINAL, LibraryStore.decodeState(legacy.toString()).pdfBackground)
+        legacy.put("pdfBackground", "unknown")
+        assertEquals(com.sandboxuser.pdfviewer.data.PdfBackground.ORIGINAL, LibraryStore.decodeState(legacy.toString()).pdfBackground)
+    }
+
     @Test fun starterGuideIsARealRenderablePdf() = runBlocking {
         val guide = store.load().single()
         assertEquals(3, guide.pages)

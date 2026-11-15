@@ -28,9 +28,9 @@ internal fun ThemePicker(selected: ColorTheme, onSelect: (ColorTheme) -> Unit, o
     val dark = LocalDarkMode.current
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Colour themes") }, text = {
         Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()).selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Make the library your own. Every theme works in light and dark mode.", color = Muted, fontSize = 13.sp)
+            Text("Make the library your own. Black turns on dark mode; you can switch back at any time.", color = Muted, fontSize = 13.sp)
             ColorTheme.entries.forEach { theme ->
-                val colors = theme.colors(dark).scheme
+                val colors = theme.colors(dark || theme == ColorTheme.BLACK).scheme
                 val active = selected == theme
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
                     .background(colors.background)

@@ -24,7 +24,7 @@ class ColorThemesTest {
             rule.onNodeWithContentDescription("Open sidebar").performClick()
             rule.onNodeWithContentDescription("Choose colour theme").performClick()
             rule.onNodeWithContentDescription("Folio colour theme").assertIsSelected()
-            for (palette in ColorTheme.entries) {
+            for (palette in ColorTheme.entries.filter { it != ColorTheme.BLACK }) {
                 rule.onNodeWithContentDescription("${palette.title} colour theme").performScrollTo().performClick().assertIsSelected()
                 rule.runOnIdle { assertEquals(palette, model.palette); assertEquals("light", model.theme) }
             }
@@ -39,6 +39,9 @@ class ColorThemesTest {
             rule.onNodeWithContentDescription("Reader options").performClick()
             rule.onNodeWithText("Colour themes").performClick()
             rule.onNodeWithContentDescription("Ocean colour theme").assertIsSelected()
+            rule.onNodeWithContentDescription("Lavender colour theme").performScrollTo().performClick()
+            rule.onNodeWithContentDescription("Black colour theme").performScrollTo().performClick()
+            rule.runOnIdle { assertEquals("dark", model.theme); assertEquals(ColorTheme.BLACK, model.palette) }
             rule.onNodeWithContentDescription("Lavender colour theme").performScrollTo().performClick()
             rule.onNodeWithText("Done").performClick()
             rule.waitForIdle()

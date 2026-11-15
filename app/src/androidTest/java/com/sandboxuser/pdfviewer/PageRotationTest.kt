@@ -22,6 +22,8 @@ class PageRotationTest {
     private fun openRotatedNote() {
         // Original point (.25, .30) becomes (.70, .25) after a clockwise quarter turn.
         surface().performTouchInput { click(Offset(width * .70f, height * .25f)) }
+        // Single taps wait briefly so a second tap can zoom instead of opening a note.
+        rule.waitUntil(2000) { rule.onAllNodesWithText("Rotation keeps this note aligned").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Rotation keeps this note aligned").assertExists()
         rule.onNodeWithText("Cancel").performClick()
     }

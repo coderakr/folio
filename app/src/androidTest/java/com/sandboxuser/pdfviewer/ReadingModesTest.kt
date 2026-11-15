@@ -55,8 +55,10 @@ class ReadingModesTest {
         rule.onNodeWithContentDescription("Read in full screen").performClick()
         rule.onNodeWithContentDescription("Scrolling PDF pages").assertExists()
         rule.onNodeWithContentDescription("PDF page 3 of 3").performTouchInput { click(center) }
+        rule.waitUntil(2000) { rule.onAllNodesWithContentDescription("Previous page").fetchSemanticsNodes().isEmpty() }
         rule.onNodeWithContentDescription("Previous page").assertDoesNotExist()
         rule.onNodeWithContentDescription("PDF page 3 of 3").performTouchInput { click(center) }
+        rule.waitUntil(2000) { rule.onAllNodesWithContentDescription("Previous page").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithContentDescription("Previous page").assertExists()
         rule.onNodeWithContentDescription("Exit full screen").performClick()
         rule.onNodeWithContentDescription("Note tool").performClick()
