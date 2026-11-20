@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sandboxuser.pdfviewer.data.Book
 import com.sandboxuser.pdfviewer.data.Mark
+import com.sandboxuser.pdfviewer.data.PageText
+import com.sandboxuser.pdfviewer.data.TextSelection
 import com.sandboxuser.pdfviewer.ui.theme.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -32,6 +34,7 @@ import kotlin.math.abs
 
 @Composable
 internal fun ScrollingPages(book: Book, model: LibraryModel, initialPage: Int, request: Pair<Int, Int>?, pageColors: PdfPageColors, rotation: Int, fullscreen: Boolean,
+    selection: TextSelection?, onSelection: (TextSelection?) -> Unit,
     onPage: (Int) -> Unit, onNote: (Mark) -> Unit, onTap: () -> Unit) {
     var zoom by remember(book.id, rotation, fullscreen, request) { mutableFloatStateOf(1f) }
     var pan by remember(book.id, rotation, fullscreen, request) { mutableStateOf(Offset.Zero) }
@@ -61,6 +64,12 @@ internal fun ScrollingPages(book: Book, model: LibraryModel, initialPage: Int, r
                     catch(e: CancellationException) { throw e }
                     catch(e: Exception) { failed = true }
                 }
+                var pageText by remember(book.id, index) { mutableStateOf<PageText?>(null) }
+                LaunchedEffect(book.id, index) {
+                    try { pageText = model.store.pageText(book.id, index) }
+                    catch(e: CancellationException) { throw e }
+                    catch(e: Exception) { pageText = PageText(emptyList(), unavailable = true) }
+                }
                 val marks = book.marks.filter { it.page == index }
                 val accent = Terracotta
                 Column(if(index == book.pages - 1) Modifier.heightIn(min = minimumLastPageHeight) else Modifier) {
@@ -75,12 +84,14 @@ internal fun ScrollingPages(book: Book, model: LibraryModel, initialPage: Int, r
                                 awaitFirstDown(requireUnconsumed = false)
                                 var travel = Offset.Zero
                                 var multiple = false
+                                var childHandled = false
                                 do {
                                     val event = awaitPointerEvent()
+                                    childHandled = childHandled || event.changes.any { it.isConsumed }
                                     multiple = multiple || event.changes.count { it.pressed } > 1
                                     val delta = event.calculatePan()
                                     travel += delta
-                                    if(multiple || (zoom > 1f && zoomedPage == index)) {
+                                    if(!childHandled && (multiple || (zoom > 1f && zoomedPage == index))) {
                                         zoomedPage = index
                                         zoom = (zoom * event.calculateZoom()).coerceIn(1f, 4f)
                                         pan = clampPagePan(pan + delta, size.width.toFloat(), size.height.toFloat(), zoom)
@@ -95,7 +106,10 @@ internal fun ScrollingPages(book: Book, model: LibraryModel, initialPage: Int, r
                         }) {
                             Image(image.asImageBitmap(), "PDF page ${index + 1} of ${book.pages}", Modifier.fillMaxSize(),
                                 colorFilter = pageColors.filter())
-                            Canvas(Modifier.fillMaxSize().pointerInput(marks, fullscreen, rotation) {
+                            Canvas(Modifier.fillMaxSize().semantics {
+                                contentDescription = "Page annotation canvas ${index + 1}"
+                                stateDescription = if(pageText == null) "Preparing text" else if(pageText!!.words.isEmpty()) "Area highlighting available" else "Text selection ready"
+                            }.pdfTextSelection(index, "read", pageText, onSelection, {}, { model.messages.trySend(it) }).pointerInput(marks, fullscreen, rotation) {
                                 detectTapGestures(
                                     onDoubleTap = if(fullscreen) { point ->
                                         if(zoom > 1f && zoomedPage == index) { zoom = 1f; pan = Offset.Zero; zoomedPage = null }
@@ -106,7 +120,10 @@ internal fun ScrollingPages(book: Book, model: LibraryModel, initialPage: Int, r
                                     val note = marks.lastOrNull { it.kind == "note" && it.points.any { p -> abs(p.first-x) < .06f && abs(p.second-y) < .04f } }
                                     if(note != null) openNote(note) else tapPage()
                                 })
-                            }) { marks.forEach { drawAnnotation(it, accent) } }
+                            }) {
+                                marks.forEach { drawAnnotation(it, accent) }
+                                selection?.takeIf { it.page == index }?.let { drawAnnotation(it.mark(0), accent) }
+                            }
                         } else if(failed) TextButton(onClick = { attempt++ }) { Text("Retry page ${index + 1}") }
                         else Text("Loading page ${index + 1}…", color = Muted)
                     }

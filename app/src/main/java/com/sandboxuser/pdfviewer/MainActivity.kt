@@ -17,6 +17,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
+import com.sandboxuser.pdfviewer.data.GridSize
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.graphics.SolidColor
@@ -101,8 +105,9 @@ fun FolioApp(model: LibraryModel) {
     LaunchedEffect(model) { for (message in model.messages) snack.showSnackbar(message) }
     LaunchedEffect(model) { for(id in model.openRequests) { selected = id; jumpPage = null; fullscreen = false } }
     val book = model.books.firstOrNull { it.id == selected }
+    LaunchedEffect(book?.id) { if(book != null) snack.currentSnackbarData?.dismiss() }
     BackHandler(selected != null) { if(fullscreen) fullscreen = false else { selected = null; jumpPage = null } }
-    Scaffold(snackbarHost = { SnackbarHost(snack) }, containerColor = Paper, contentWindowInsets = if(fullscreen) WindowInsets(0,0,0,0) else WindowInsets.safeDrawing) { padding ->
+    Scaffold(snackbarHost = { SnackbarHost(snack, Modifier.padding(bottom = if(book == null) 0.dp else if(fullscreen) 72.dp else 160.dp)) }, containerColor = Paper, contentWindowInsets = if(fullscreen) WindowInsets(0,0,0,0) else WindowInsets.safeDrawing) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when {
                 model.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -132,6 +137,10 @@ fun IconAction(icon: String, label: String, tint: Color = Ink, enabled: Boolean 
 fun LibraryScreen(model: LibraryModel, folderId: String?, onFolder: (String?) -> Unit, onAdd: (String?) -> Unit, onImportDirectory: (String?) -> Unit, onOpen: (Book, Int?) -> Unit) {
     var themesMenu by remember { mutableStateOf(false) }
     var pdfBackgroundMenu by remember { mutableStateOf(false) }
+    var gridSizeMenu by remember { mutableStateOf(false) }
+    var gridWidth by remember { mutableFloatStateOf(320f) }
+    val density = LocalDensity.current
+    val columns = model.gridSize.columns(gridWidth, density.fontScale)
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val focus = LocalFocusManager.current
@@ -171,6 +180,7 @@ fun LibraryScreen(model: LibraryModel, folderId: String?, onFolder: (String?) ->
                 onClose = { scope.launch { drawer.close() } },
                 onThemes = { afterClosingDrawer { themesMenu = true } },
                 onPdfBackground = { afterClosingDrawer { pdfBackgroundMenu = true } },
+                onGridSize = { afterClosingDrawer { gridSizeMenu = true } },
                 onNewFolder = { afterClosingDrawer { newFolder() } },
                 onImportFolder = { afterClosingDrawer { onImportDirectory(if(inFolder) folderId else null) } }
             )
@@ -197,7 +207,7 @@ fun LibraryScreen(model: LibraryModel, folderId: String?, onFolder: (String?) ->
                     TextButton(onClick = model::stopDirectoryImport) { Text("Stop") }
                 }
             }
-            LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            LazyColumn(Modifier.weight(1f).testTag("Library items").onSizeChanged { gridWidth = with(density) { it.width.toDp().value } - 40f }, contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 if(inFolder) item {
                     Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { onFolder(null); query = "" }, contentPadding = PaddingValues(horizontal = 4.dp)) { Text("Library", fontSize = 12.sp) }
@@ -237,12 +247,12 @@ fun LibraryScreen(model: LibraryModel, folderId: String?, onFolder: (String?) ->
                             Glyph("folder", Terracotta, Modifier.size(28.dp))
                             Column(Modifier.padding(start = 12.dp)) { Text(if(inFolder) "Organise this section" else "A place for every subject", fontSize = 14.sp, fontWeight = FontWeight.Medium); Text(if(inFolder) "Create a subfolder or import a folder here." else "Create Science, Maths, Art, or your own.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
                         }
-                    } else if(folderGrid) items(children.chunked(2), key = { "folders-${it.first().id}" }) { pair ->
+                    } else if(folderGrid) items(children.chunked(columns), key = { "folders-${it.first().id}" }) { pair ->
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             pair.forEach { f ->
-                                FolderTile(f, model.books.count { it.folderId == f.id }, model.folders.count { it.parentId == f.id }, true, Modifier.weight(1f)) { onFolder(f.id); query = "" }
+                                FolderTile(f, model.books.count { it.folderId == f.id }, model.folders.count { it.parentId == f.id }, true, Modifier.weight(1f), model.gridSize) { onFolder(f.id); query = "" }
                             }
-                            if(pair.size == 1) Spacer(Modifier.weight(1f))
+                            repeat(columns - pair.size) { Spacer(Modifier.weight(1f)) }
                         }
                     } else items(children, key = { "folder-${it.id}" }) { f ->
                         FolderTile(f, model.books.count { it.folderId == f.id }, model.folders.count { it.parentId == f.id }, false, Modifier.fillMaxWidth()) { onFolder(f.id); query = "" }
@@ -261,9 +271,9 @@ fun LibraryScreen(model: LibraryModel, folderId: String?, onFolder: (String?) ->
                         }
                     }
                     if(filtered.isEmpty() && (!inFolder || children.isEmpty() || query.isNotEmpty())) item { EmptyPanel(if(query.isNotEmpty()) "No matching reads" else if(inFolder) "Make room for a new read" else if(tab == 1) "Save your favourites" else "Your next read belongs here", if(inFolder) "Use Add to import PDFs or a directory into this folder. You can also move PDFs here from All PDFs." else if(tab == 1) "Tap the star on a PDF to keep it here." else "Add a PDF or try a different search.") }
-                    if(grid) items(filtered.chunked(2), key = { it.first().id }) { pair -> Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        pair.forEach { b -> Box(Modifier.weight(1f)) { BookCard(b, model.store, { onOpen(b, null) }, { model.update(b.id) { it.copy(favorite = !it.favorite) } }, { menuBook = b }) } }
-                        if(pair.size == 1) Spacer(Modifier.weight(1f))
+                    if(grid) items(filtered.chunked(columns), key = { it.first().id }) { pair -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        pair.forEach { b -> Box(Modifier.weight(1f)) { BookCard(b, model.store, { onOpen(b, null) }, { model.update(b.id) { it.copy(favorite = !it.favorite) } }, { menuBook = b }, model.gridSize) } }
+                        repeat(columns - pair.size) { Spacer(Modifier.weight(1f)) }
                     } } else items(filtered, key = { it.id }) { b ->
                         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(CardSurface).border(1.dp, Line, RoundedCornerShape(14.dp)).clickable { onOpen(b, null) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                             PdfCover(b, model.store, Modifier.width(46.dp).height(64.dp))
@@ -301,6 +311,7 @@ fun LibraryScreen(model: LibraryModel, folderId: String?, onFolder: (String?) ->
     }
     // Register after folder navigation so Back dismisses the drawer before leaving a folder.
     BackHandler(drawer.isOpen) { scope.launch { drawer.close() } }
+    if(gridSizeMenu) GridSizePicker(model.gridSize, model::changeGridSize) { gridSizeMenu = false }
     if(pdfBackgroundMenu) PdfBackgroundPicker(model.pdfBackground, model::changePdfBackground) { pdfBackgroundMenu = false }
     if(themesMenu) ThemePicker(model.palette, model::changePalette) { themesMenu = false }
     menuBook?.let { b -> AlertDialog(onDismissRequest = { menuBook = null }, title = { Text(b.title) }, text = { Column {
@@ -345,9 +356,9 @@ private fun LibrarySearch(query: String, onQuery: (String) -> Unit, label: Strin
 }
 
 @Composable
-private fun FolderTile(folder: Folder, pdfCount: Int, childCount: Int, grid: Boolean, modifier: Modifier, onOpen: () -> Unit) {
+private fun FolderTile(folder: Folder, pdfCount: Int, childCount: Int, grid: Boolean, modifier: Modifier, gridSize: GridSize = GridSize.MEDIUM, onOpen: () -> Unit) {
     val tile = modifier.clip(RoundedCornerShape(14.dp)).background(Sage).clickable(onClick = onOpen)
-        .semantics { contentDescription = "Open folder ${folder.name}" }.padding(16.dp)
+        .semantics { contentDescription = "Open folder ${folder.name}" }.padding(if(grid && gridSize == GridSize.SMALL) 10.dp else 16.dp)
     val details: @Composable () -> Unit = {
         Text(folder.name, maxLines = if(grid) 2 else 1, minLines = if(grid) 2 else 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
         Text("$pdfCount PDFs · $childCount folders", color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
@@ -376,10 +387,10 @@ fun ContinueCard(book: Book, store: LibraryStore, onClick: () -> Unit) {
 }
 
 @Composable
-fun BookCard(book: Book, store: LibraryStore, onClick: () -> Unit, onStar: () -> Unit, onMenu: () -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CardSurface).border(1.dp, Line, RoundedCornerShape(16.dp)).clickable(onClick = onClick)) {
-        Box(Modifier.fillMaxWidth().height(155.dp).background(Sage).padding(15.dp)) {
-            PdfCover(book, store, Modifier.align(Alignment.Center).width(91.dp).fillMaxHeight())
+fun BookCard(book: Book, store: LibraryStore, onClick: () -> Unit, onStar: () -> Unit, onMenu: () -> Unit, gridSize: GridSize = GridSize.MEDIUM) {
+    Column(Modifier.fillMaxWidth().testTag("PDF card ${book.id}").clip(RoundedCornerShape(16.dp)).background(CardSurface).border(1.dp, Line, RoundedCornerShape(16.dp)).clickable(onClick = onClick)) {
+        Box(Modifier.fillMaxWidth().height(gridSize.coverHeight.dp).background(Sage).padding(if(gridSize == GridSize.SMALL) 8.dp else 15.dp)) {
+            PdfCover(book, store, Modifier.align(Alignment.Center).width((gridSize.coverHeight * .6f).dp).fillMaxHeight())
             Box(Modifier.align(Alignment.TopEnd).offset(x = 9.dp, y = (-9).dp).size(36.dp).background(Paper.copy(alpha = .95f), CircleShape)) {
                 IconAction("star", if(book.favorite) "Unfavourite ${book.title}" else "Favourite ${book.title}", if(book.favorite) Terracotta else Muted, onClick = onStar)
             }

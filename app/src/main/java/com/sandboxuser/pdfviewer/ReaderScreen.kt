@@ -1,6 +1,7 @@
 package com.sandboxuser.pdfviewer
 
 import android.graphics.Bitmap
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -41,6 +42,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sandboxuser.pdfviewer.data.Book
 import com.sandboxuser.pdfviewer.data.Mark
+import com.sandboxuser.pdfviewer.data.PageText
+import com.sandboxuser.pdfviewer.data.TextSelection
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.ClipEntry
+import android.content.ClipData
+import kotlinx.coroutines.launch
 import com.sandboxuser.pdfviewer.ui.theme.*
 import kotlin.math.abs
 import kotlin.math.min
@@ -77,6 +84,18 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
     var bookmarksMenu by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Mark?>(null) }
     var noteText by remember { mutableStateOf("") }
+    var selection by remember(book.id, page, tool, scrollMode, fullscreen, rotation) { mutableStateOf<TextSelection?>(null) }
+    BackHandler(selection != null) { selection = null }
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    var pageText by remember(book.id, page, scrollMode) { mutableStateOf<PageText?>(null) }
+    LaunchedEffect(book.id, page, scrollMode) {
+        if(!scrollMode) {
+            try { pageText = model.store.pageText(book.id, page) }
+            catch(e: kotlinx.coroutines.CancellationException) { throw e }
+            catch(e: Exception) { pageText = PageText(emptyList(), unavailable = true) }
+        }
+    }
     var draft by remember { mutableStateOf<List<Pair<Float, Float>>>(emptyList()) }
     LaunchedEffect(rotation, fullscreen) { zoom = 1f; pan = Offset.Zero; draft = emptyList() }
     var bitmap by remember(book.id, page) { mutableStateOf<Bitmap?>(null) }
@@ -119,7 +138,7 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
         }
         HorizontalDivider(color = Line)
         if(tool != "read") Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(when(tool) { "highlight" -> "Drag across a line to highlight"; "ink" -> "Draw on the page with your finger"; "note" -> "Tap the page to leave a note"; else -> "" }, fontSize = 11.sp, color = Muted, modifier = Modifier.weight(1f))
+            Text(when(tool) { "highlight" -> when { pageText == null -> "Preparing text selection…"; pageText!!.words.isEmpty() -> "No selectable text · Drag to highlight an area"; else -> "Tap a word or drag across lines to highlight" }; "ink" -> "Draw on the page with your finger"; "note" -> "Tap the page to leave a note"; else -> "" }, fontSize = 11.sp, color = Muted, modifier = Modifier.weight(1f))
             if(tool == "highlight" || tool == "ink") Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 markColors.forEachIndexed { i, c -> Box(Modifier.size(27.dp).clip(CircleShape).clickable { color = i }.border(if(color == i) 2.dp else 0.dp, if(color == i) Ink else Color.Transparent, CircleShape).padding(4.dp).background(c, CircleShape).semantics { contentDescription = "${listOf("Yellow", "Green", "Pink", "Blue")[i]} annotation colour" }) }
             }
@@ -129,7 +148,8 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
             val image = bitmap
             if(scrollMode) {
                 ScrollingPages(book, model, page, scrollRequest, pageColors, rotation, fullscreen,
-                    onPage = { page = it }, onNote = ::editNote, onTap = { if(fullscreen) fullControls = !fullControls })
+                    selection = selection, onSelection = { selection = it },
+                    onPage = { page = it }, onNote = ::editNote, onTap = { if(selection != null) selection = null else if(fullscreen) fullControls = !fullControls })
             } else if(image != null) {
                 val originalRatio = image.width.toFloat() / image.height
                 val ratio = if(rotation % 180 == 0) originalRatio else 1f / originalRatio
@@ -140,19 +160,21 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
                         awaitFirstDown(requireUnconsumed = false)
                         var travel = Offset.Zero
                         var multiple = false
+                        var childHandled = false
                         val startedZoomed = zoom > 1f
                         do {
                             val event = awaitPointerEvent()
+                            childHandled = childHandled || event.changes.any { it.isConsumed }
                             multiple = multiple || event.changes.count { it.pressed } > 1
                             val delta = event.calculatePan()
                             travel += delta
-                            if(multiple || startedZoomed) {
+                            if(!childHandled && (multiple || startedZoomed)) {
                                 zoom = (zoom * event.calculateZoom()).coerceIn(1f, 4f)
                                 pan = clampPagePan(pan + delta, pageWidth.toPx(), pageHeight.toPx(), zoom)
                             }
-                            if(travel.getDistance() > viewConfiguration.touchSlop || multiple) event.changes.forEach { it.consume() }
+                            if(!childHandled && (travel.getDistance() > viewConfiguration.touchSlop || multiple)) event.changes.forEach { it.consume() }
                         } while(event.changes.any { it.pressed })
-                        if(!multiple && !startedZoomed && abs(travel.x) > max(48.dp.toPx(), size.width * .15f) && abs(travel.x) > abs(travel.y) * 1.3f) {
+                        if(!childHandled && !multiple && !startedZoomed && abs(travel.x) > max(48.dp.toPx(), size.width * .15f) && abs(travel.x) > abs(travel.y) * 1.3f) {
                             goToPage(page + if(travel.x < 0) 1 else -1)
                         }
                     }
@@ -162,17 +184,19 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
                             colorFilter = pageColors.filter())
                         Canvas(Modifier.fillMaxSize().semantics {
                             contentDescription = "Page annotation canvas"
+                            stateDescription = if(pageText == null) "Preparing text" else if(pageText!!.words.isEmpty()) "Area highlighting available" else "Text selection ready"
                             if(fullscreen) customActions = listOf(
                                 CustomAccessibilityAction("Previous page") { if(page > 0) goToPage(page - 1); true },
                                 CustomAccessibilityAction("Next page") { if(page < book.pages - 1) goToPage(page + 1); true },
                                 CustomAccessibilityAction("Exit full screen") { onFullscreen(false); true }
                             )
                         }
+                            .pdfTextSelection(page, tool, pageText, { selection = it }, { addMark(it.mark(color)) }, { model.messages.trySend(it) })
                             .pointerInput(tool, page, color) {
-                                if(tool == "highlight" || tool == "ink") detectDragGestures(
+                                if(tool == "ink") detectDragGestures(
                                     onDragStart = { point -> draft = listOf((point.x / size.width).coerceIn(0f,1f) to (point.y / size.height).coerceIn(0f,1f)) },
                                     onDrag = { change, _ -> change.consume(); draft = draft + ((change.position.x / size.width).coerceIn(0f,1f) to (change.position.y / size.height).coerceIn(0f,1f)) },
-                                    onDragEnd = { if(draft.size > 1) addMark(Mark(page = page, kind = tool, points = if(tool == "highlight") listOf(draft.first(), draft.last()) else draft, color = color)); draft = emptyList() },
+                                    onDragEnd = { if(draft.size > 1) addMark(Mark(page = page, kind = tool, points = draft, color = color)); draft = emptyList() },
                                     onDragCancel = { draft = emptyList() }
                                 )
                             }.pointerInput(tool, page, currentMarks, fullscreen, rotation) {
@@ -186,6 +210,7 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
                                     val existing = currentMarks.lastOrNull { it.kind == "note" && it.points.any { p -> abs(p.first-x) < .06f && abs(p.second-y) < .04f } }
                                     if(existing != null) editNote(existing)
                                     else if(tool == "note") editNote(Mark(page = page, kind = "note", points = listOf(x to y)))
+                                    else if(selection != null) selection = null
                                     else if(fullscreen) {
                                         val screenX = when(rotation) { 90 -> 1f - y; 180 -> 1f - x; 270 -> y; else -> x }
                                         if(screenX < .2f && zoom == 1f && page > 0) goToPage(page - 1)
@@ -195,6 +220,7 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
                                 })
                             }) {
                             currentMarks.forEach { drawAnnotation(it, accent) }
+                            selection?.takeIf { it.page == page }?.let { drawAnnotation(it.mark(color), accent) }
                             if(draft.isNotEmpty()) drawAnnotation(Mark(page = page, kind = tool, points = draft, color = color), accent)
                         }
                     }
@@ -203,6 +229,15 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
             } else if(renderError) Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
                 Text("This page could not be displayed."); TextButton(onClick = { renderAttempt++ }) { Text("Try again") }
             } else CircularProgressIndicator()
+            selection?.takeIf { tool == "read" }?.let { selectedText ->
+                Row(Modifier.align(Alignment.BottomCenter).padding(bottom = if(fullscreen) 64.dp else 8.dp).fillMaxWidth().background(Paper).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(selectedText.text, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp,
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "Selected PDF text" })
+                    TextButton(onClick = { scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("PDF text", selectedText.text))); selection = null } }) { Text("Copy") }
+                    TextButton(onClick = { addMark(selectedText.mark(color)); selection = null }) { Text("Highlight") }
+                    IconAction("close", "Clear text selection") { selection = null }
+                }
+            }
             if(fullscreen) {
                 Row(Modifier.align(Alignment.TopEnd).padding(12.dp).clip(RoundedCornerShape(24.dp)).background(Paper.copy(alpha = .92f)), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.semantics { stateDescription = "Rotated $rotation degrees clockwise" }) {
@@ -277,6 +312,14 @@ fun ReaderScreen(book: Book, model: LibraryModel, initialPage: Int?, fullscreen:
 }
 
 internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnnotation(mark: Mark, accent: Color) {
+    if(mark.kind == "highlight" && mark.boxes.isNotEmpty()) {
+        val c = markColors[mark.color.coerceIn(0, 3)].copy(alpha = .38f)
+        mark.boxes.forEach { box ->
+            drawRect(c, Offset(box.left * size.width, box.top * size.height),
+                Size((box.right - box.left) * size.width, (box.bottom - box.top) * size.height))
+        }
+        return
+    }
     if(mark.points.isEmpty()) return
     val c = markColors[mark.color.coerceIn(0,3)]
     val points = mark.points.map { Offset(it.first * size.width, it.second * size.height) }

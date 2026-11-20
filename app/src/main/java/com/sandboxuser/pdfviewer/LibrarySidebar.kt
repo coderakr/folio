@@ -26,6 +26,7 @@ internal fun LibrarySidebar(
     onClose: () -> Unit,
     onThemes: () -> Unit,
     onPdfBackground: () -> Unit,
+    onGridSize: () -> Unit,
     onNewFolder: () -> Unit,
     onImportFolder: () -> Unit
 ) {
@@ -61,6 +62,11 @@ internal fun LibrarySidebar(
                 label = { Column { Text("PDF page background"); Text(model.pdfBackground.title, color = Muted, fontSize = 12.sp) } },
                 icon = { Glyph("book", Terracotta) }, selected = false, onClick = onPdfBackground,
                 modifier = Modifier.semantics { contentDescription = "Choose PDF background" }
+            )
+            NavigationDrawerItem(
+                label = { Column { Text("Grid size"); Text(model.gridSize.title, color = Muted, fontSize = 12.sp) } },
+                icon = { Glyph("grid", Terracotta) }, selected = false, onClick = onGridSize,
+                modifier = Modifier.semantics { contentDescription = "Choose grid size" }
             )
             HorizontalDivider(Modifier.padding(vertical = 16.dp), color = Line)
             SidebarHeading("Organise")

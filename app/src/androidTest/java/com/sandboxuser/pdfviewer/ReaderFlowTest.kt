@@ -20,6 +20,7 @@ class ReaderFlowTest {
         rule.runOnIdle { model().update("folio-welcome") { it.copy(marks = emptyList(), page = 0, bookmarks = emptySet()) } }
         rule.onNodeWithText("A little guide to Folio").performClick()
         rule.waitUntil(15000) { rule.onAllNodesWithContentDescription("Page annotation canvas").fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(20000) { rule.onAllNodes(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Text selection ready")).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithContentDescription("Highlight tool").performClick()
         rule.onNodeWithContentDescription("Page annotation canvas").performTouchInput {
             swipe(Offset(width * .1f, height * .47f), Offset(width * .8f, height * .48f), 500)

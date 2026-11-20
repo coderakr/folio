@@ -22,14 +22,14 @@ import java.security.MessageDigest
 import java.util.UUID
 
 data class Mark(val id: String = UUID.randomUUID().toString(), val page: Int, val kind: String,
-    val points: List<Pair<Float, Float>>, val color: Int = 0, val text: String = "")
+    val points: List<Pair<Float, Float>>, val color: Int = 0, val text: String = "", val boxes: List<TextBox> = emptyList())
 data class Book(val id: String, val title: String, val pages: Int, val bytes: Long,
     val added: Long = System.currentTimeMillis(), val opened: Long = 0, val page: Int = 0,
     val favorite: Boolean = false, val bookmarks: Set<Int> = emptySet(), val marks: List<Mark> = emptyList(),
     val digest: String = "", val folderId: String? = null)
 
 data class Folder(val id: String = UUID.randomUUID().toString(), val name: String, val parentId: String? = null)
-data class LibraryData(val books: List<Book> = emptyList(), val folders: List<Folder> = emptyList(), val theme: String = "system", val palette: ColorTheme = ColorTheme.FOLIO, val pdfBackground: PdfBackground = PdfBackground.ORIGINAL)
+data class LibraryData(val books: List<Book> = emptyList(), val folders: List<Folder> = emptyList(), val theme: String = "system", val palette: ColorTheme = ColorTheme.FOLIO, val pdfBackground: PdfBackground = PdfBackground.ORIGINAL, val gridSize: GridSize = GridSize.MEDIUM)
 
 class LibraryStore(private val context: Context) {
     private val directory = File(context.filesDir, "library").apply { mkdirs() }
@@ -107,6 +107,15 @@ class LibraryStore(private val context: Context) {
             }
         }
     }
+    private val textLock = Mutex()
+    private val textCache = android.util.LruCache<String, PageText>(8)
+    suspend fun pageText(id: String, page: Int): PageText = withContext(Dispatchers.IO) {
+        textLock.withLock {
+            val key = "$id:$page"
+            textCache.get(key) ?: extractPageText(context, file(id), page).also { textCache.put(key, it) }
+        }
+    }
+
     private fun createGuide(): Book {
         val id = "folio-welcome"
         val pdf = PdfDocument()
@@ -149,6 +158,7 @@ class LibraryStore(private val context: Context) {
             put("theme", state.theme)
             put("palette", state.palette.id)
             put("pdfBackground", state.pdfBackground.id)
+            put("gridSize", state.gridSize.id)
         }.toString()
         fun decodeState(raw: String): LibraryData {
             // Existing installations stored a bare book array. Migrate without changing PDFs or marks.
@@ -160,7 +170,8 @@ class LibraryStore(private val context: Context) {
                 List(folders.length()) { folders.getJSONObject(it).let { f -> Folder(f.getString("id"), f.getString("name"), if(f.isNull("parentId")) null else f.getString("parentId")) } },
                 root.optString("theme", "system").takeIf { it in listOf("system", "light", "dark") } ?: "system",
                 ColorTheme.fromId(root.optString("palette", "folio")),
-                PdfBackground.fromId(root.optString("pdfBackground", "original")))
+                PdfBackground.fromId(root.optString("pdfBackground", "original")),
+                GridSize.fromId(root.optString("gridSize", "medium")))
         }
 
         fun encode(books: List<Book>): String = JSONArray().apply {
@@ -170,6 +181,7 @@ class LibraryStore(private val context: Context) {
                 put("folderId", b.folderId ?: JSONObject.NULL); put("digest", b.digest); put("bookmarks", JSONArray(b.bookmarks.toList()))
                 put("marks", JSONArray().apply { b.marks.forEach { m -> put(JSONObject().apply {
                     put("id", m.id); put("page", m.page); put("kind", m.kind); put("color", m.color); put("text", m.text)
+                    put("boxes", JSONArray().apply { m.boxes.forEach { b -> put(JSONArray().put(b.left).put(b.top).put(b.right).put(b.bottom)) } })
                     put("points", JSONArray().apply { m.points.forEach { (x, y) -> put(JSONArray().put(x).put(y)) } })
                 }) } })
             }) }
@@ -187,7 +199,8 @@ class LibraryStore(private val context: Context) {
                         val m = marks.getJSONObject(j); val points = m.getJSONArray("points")
                         Mark(m.getString("id"), m.getInt("page"), m.getString("kind"),
                             List(points.length()) { k -> points.getJSONArray(k).let { it.getDouble(0).toFloat() to it.getDouble(1).toFloat() } },
-                            m.optInt("color"), m.optString("text"))
+                            m.optInt("color"), m.optString("text"),
+                            m.optJSONArray("boxes")?.let { boxes -> List(boxes.length()) { k -> boxes.getJSONArray(k).let { TextBox(it.getDouble(0).toFloat(), it.getDouble(1).toFloat(), it.getDouble(2).toFloat(), it.getDouble(3).toFloat()) } } }.orEmpty())
                     }, b.optString("digest"), if(b.isNull("folderId")) null else b.getString("folderId"))
             }
         }

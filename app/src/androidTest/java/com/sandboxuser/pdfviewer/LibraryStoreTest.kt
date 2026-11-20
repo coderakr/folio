@@ -59,6 +59,21 @@ class LibraryStoreTest {
         assertEquals(com.sandboxuser.pdfviewer.data.PdfBackground.ORIGINAL, LibraryStore.decodeState(legacy.toString()).pdfBackground)
     }
 
+    @Test fun gridSizeAndTextHighlightsPersistWithLegacyDefaults() = runBlocking {
+        val original = store.loadState()
+        val mark = Mark(page = 0, kind = "highlight", points = emptyList(), text = "Selected words", boxes = listOf(
+            com.sandboxuser.pdfviewer.data.TextBox(.1f, .2f, .3f, .23f), com.sandboxuser.pdfviewer.data.TextBox(.1f, .3f, .4f, .33f)))
+        for(size in com.sandboxuser.pdfviewer.data.GridSize.entries) {
+            val state = original.copy(gridSize = size, books = original.books.map { it.copy(marks = listOf(mark)) })
+            store.saveState(state)
+            assertEquals(state, LibraryStore(context).loadState())
+        }
+        val legacy = org.json.JSONObject(LibraryStore.encodeState(original)).apply { remove("gridSize") }
+        assertEquals(com.sandboxuser.pdfviewer.data.GridSize.MEDIUM, LibraryStore.decodeState(legacy.toString()).gridSize)
+        legacy.put("gridSize", "unknown")
+        assertEquals(com.sandboxuser.pdfviewer.data.GridSize.MEDIUM, LibraryStore.decodeState(legacy.toString()).gridSize)
+    }
+
     @Test fun starterGuideIsARealRenderablePdf() = runBlocking {
         val guide = store.load().single()
         assertEquals(3, guide.pages)
